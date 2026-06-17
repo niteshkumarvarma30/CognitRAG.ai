@@ -136,3 +136,27 @@ To give the AI persistent memory across session boundaries, we implemented two d
 
 * **Preference Memory (Policy):** A table (preference_memory) that stores strict rules scoped to a specific user_id. The load_memory graph node fetches these rules (e.g., "Always use bullet points") using a lightning-fast SQL query and injects them into the system prompt.
 * **Episodic Memory (Distillation):** A table (episodic_memory) that stores concise summaries of past conversations. When a user has a multi-turn chat, a background LLM node (save_memory) distills the full transcript into a short summary and saves it. The next time the user connects, the graph injects this distilled summary instead of raw logs, preserving context while saving thousands of tokens.
+
+## 5. Fullstack Application Architecture
+Moving beyond the AI workflow, the platform is built as a complete, production-ready SaaS using modern web architecture, robust authentication, and resilient networking.
+
+### 5.1 Multi-Tenancy & Security
+**The Concept:** A SaaS platform must securely isolate Company A's documents, vectors, and chat history from Company B.
+**Our Approach:** We implemented strict **Logical Multi-Tenancy** backed by Clerk Authentication and Supabase Row Level Security (RLS). When an admin registers their company, Clerk generates a unique `user_id`. We deterministically hash this ID into a Postgres UUID using `uuid5`. This `tenant_id` is then mathematically enforced on every single row in Supabase and every node in the Neo4j Knowledge Graph. The AI is physically incapable of traversing Company B's graph while answering Company A's queries.
+
+### 5.2 The Frontend React (Vite) Client
+We built a highly responsive frontend split into two primary Role-Based Access portals:
+* **Company Portal (Admin):** A dashboard where admins can manage their organization's Knowledge Base. Admins can upload PDFs (triggering the backend chunking and graph extraction pipelines), view total token usage for billing purposes, and securely delete documents.
+* **Employee Portal (User):** A sleek chat interface where employees can interact with the RAG assistant.
+
+### 5.3 Resilient Networking & Server-Sent Events (SSE)
+**The Concept:** Agentic AI workflows can take several seconds to complete as they traverse multiple nodes, retrieve documents, and rerank chunks. A standard HTTP request would leave the user staring at a frozen screen.
+**Our Approach:** We utilized **Server-Sent Events (SSE)**. The LangGraph backend streams its intermediate state (e.g., "Routing Query...", "Retrieving from Vector & Graph...") directly to the React frontend in real-time. This provides complete transparency into the AI's "thought process."
+
+### 5.4 Graph Garbage Collection
+**The Concept:** When a user deletes a PDF, the AI must instantly "forget" any concepts or entities it learned specifically from that document to maintain strict data compliance.
+**Our Approach:** When the UI triggers a document deletion, the backend destroys the raw PDF from Supabase Storage and deletes the associated vector chunks. For the Neo4j Knowledge Graph, we wrote a specialized "Garbage Collection" Cypher query. It locates the specific `Document` node, deletes it, and then scans for any orphaned `Entity` nodes (concepts that were *only* found inside that specific document). It wipes those unique concepts from the graph while safely preserving entities that are still linked to other documents.
+
+### 5.5 Circuit Breaker Fail-Safes
+**The Concept:** The application must not crash or freeze if a third-party AI provider goes offline.
+**Our Approach:** We implemented strict network timeouts and fail-safes. For example, if the Jina API stalls during the Cross-Encoder Reranking phase, the backend catches the timeout exception and gracefully bypasses the reranker. Instead of hanging indefinitely, it instantly falls back to the highly-accurate Top-3 chunks provided by the Reciprocal Rank Fusion algorithm and generates the answer.
