@@ -94,7 +94,11 @@ async def chat_stream_endpoint(request: ChatRequest):
                 
             if node_name == "load_memory":
                 yield f"data: {json.dumps({'status': 'Loading user memory...'})}\n\n"
-            elif node_name == "router":
+            elif node_name == "contextualize_query":
+                yield f"data: {json.dumps({'status': 'Contextualizing query...'})}\n\n"
+            elif node_name == "check_cache":
+                yield f"data: {json.dumps({'status': 'Checking semantic cache...'})}\n\n"
+            elif node_name == "route_query":
                 yield f"data: {json.dumps({'status': 'Routing query...'})}\n\n"
             elif node_name == "retrieve":
                 yield f"data: {json.dumps({'status': 'Retrieving from Vector & Graph...'})}\n\n"

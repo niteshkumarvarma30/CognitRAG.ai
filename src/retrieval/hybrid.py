@@ -108,16 +108,22 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
     sorted_contents = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
     return sorted_contents
 
+import concurrent.futures
+
 def hybrid_retriever(tenant_id: str, query: str, top_k: int = 10) -> str:
-    """Executes all 3 searches and fuses them with RRF."""
-    print("  -> Running Vector Search (Cosine)...")
-    v_res = vector_search(tenant_id, query)
+    """Executes all 3 searches in parallel and fuses them with RRF."""
+    print("  -> Running Hybrid Search (Vector + Keyword + Graph) in Parallel...")
     
-    print("  -> Running Keyword Search (BM25)...")
-    k_res = keyword_search(tenant_id, query)
+    v_res, k_res, g_res = [], [], []
     
-    print("  -> Running Graph Search (Neo4j Cypher)...")
-    g_res = graph_search(tenant_id, query)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        future_v = executor.submit(vector_search, tenant_id, query)
+        future_k = executor.submit(keyword_search, tenant_id, query)
+        future_g = executor.submit(graph_search, tenant_id, query)
+        
+        v_res = future_v.result()
+        k_res = future_k.result()
+        g_res = future_g.result()
     
     print("  -> Applying Reciprocal Rank Fusion (RRF)...")
     fused_docs = compute_rrf(v_res, k_res, g_res)

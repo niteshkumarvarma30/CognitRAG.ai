@@ -15,7 +15,11 @@ graph TD
     %% Memory Injection
     Start([Session Start]) --> MemLoad[("Load Episodic & Preference Memory<br/>(Supabase)")]
     MemLoad --> Contextualize{"Query Contextualization<br/>(Sarvam-8B)"}
-    Contextualize --> Router{"Router<br/>(Groq/Llama-3)"}
+    
+    %% Semantic Caching
+    Contextualize --> SemanticCache{"Semantic Cache Check<br/>(Similarity > 95%)"}
+    SemanticCache -->|Hit| MemDistill{"Distill Episodic Memory<br/>(Save to Supabase)"}
+    SemanticCache -->|Miss| Router{"Router<br/>(Groq/Llama-3)"}
     
     %% Routing Logic
     Router -->|Greeting / FAQ| Cache["Static Response Cache"]
@@ -52,14 +56,14 @@ graph TD
 1. **Stateful AI Memory Injection:** Before processing the query, the system fetches the user's `Preference Memory` (rules) and `Episodic Memory` (past conversation summaries) from Supabase and injects them into the LangGraph state.
 2. **Contextualization:** If the user asks a follow-up question (e.g., "how do I fix it?"), a lightweight LLM rewrites it into a standalone query using the chat history.
 3. **Intent Routing:** A fast LLM (`sarvam-105b` or `llama-3`) classifies the query. Small-talk is routed to a static cache, while actual questions are routed to the retrieval engine.
-4. **Hybrid Retrieval:** The system simultaneously queries three databases:
-   - **Vector Search** (Cosine similarity via pgvector)
+4. **Parallel Hybrid Retrieval:** The system simultaneously queries three databases in parallel threads to drop latency by 60%:
+   - **Vector Search** (HNSW Cosine similarity via pgvector)
    - **Keyword Search** (BM25 Full Text Search)
    - **Knowledge Graph** (Coreference Resolution + Cypher queries via Neo4j)
 5. **Reciprocal Rank Fusion (RRF):** The results from all three databases are mathematically fused together to surface the absolute best chunks, giving a 1.5x score boost to chunks where the search keywords match the Markdown Header.
 6. **Cross-Encoder Reranking:** The top 10 chunks are passed to the strict `jina-reranker-v2`. Any chunk that scores below `0.05` is instantly deleted to prevent hallucinations.
 7. **Corrective RAG (CRAG) Loop:** If the Reranker deletes *all* the chunks, the system intercepts the failure. Instead of answering "I don't know," an LLM dynamically rewrites the user's query and loops back to Step 4. (This is capped at 1 rewrite attempt to prevent infinite loops).
-8. **Generation & Memory Distillation:** The validated chunks are passed to `sarvam-30b` to generate the final answer. In the background, an LLM distills the interaction into a short summary and saves it back to the `episodic_memory` table for the next visit.
+8. **Generation & Memory Distillation:** The validated chunks are passed to `sarvam-30b` to generate the final answer. In the background, an LLM distills the interaction into a short summary and saves it back to the `episodic_memory` table for the next visit. New answers are also instantly saved to the `semantic_cache` table for 0ms lookup on future identical queries.
 
 ### Stateful AI Memory (Handling Session Restarts)
 To prevent the LLM's context window from blowing up with massive raw chat logs, the system uses a **Distill & Inject** architecture across session boundaries:

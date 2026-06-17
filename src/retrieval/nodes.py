@@ -29,8 +29,38 @@ class RouteDecision(BaseModel):
 class GraderDecision(BaseModel):
     is_relevant: str = Field(description="Must be exactly 'yes' or 'no'")
 
+from src.retrieval.hybrid import get_embedding
+
 class RewrittenQuery(BaseModel):
     new_query: str = Field(description="The reformulated question")
+
+
+@traceable(name="check_semantic_cache")
+def check_cache(state):
+    print("--- CHECKING SEMANTIC CACHE ---")
+    question = state["question"]
+    tenant_id = state["tenant_id"]
+    
+    try:
+        query_embedding = get_embedding(question)
+        db = supabase_manager.get_tenant_client(tenant_id)
+        
+        response = db.rpc("match_semantic_cache", {
+            "query_embedding": query_embedding,
+            "p_tenant_id": tenant_id,
+            "match_threshold": 0.95
+        }).execute()
+        
+        if response.data and len(response.data) > 0:
+            cached_answer = response.data[0]["response"]
+            print(f"Cache Hit! Similarity: {response.data[0]['similarity']:.4f}")
+            return {"route": "cached", "generation": cached_answer}
+            
+        print("Cache Miss.")
+        return {"route": "not_cached"}
+    except Exception as e:
+        print(f"Semantic Cache check failed: {e}")
+        return {"route": "not_cached"}
 
 
 @traceable(name="route_query")
