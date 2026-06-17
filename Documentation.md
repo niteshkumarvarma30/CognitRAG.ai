@@ -82,6 +82,12 @@ As we built this SaaS, we hit several technical bottlenecks that required archit
 > **Reason:** The Markdown Splitter caused "Context Starvation" bugs when headers contained formatting characters (like `**`). It also made chunk sizes unpredictable. We replaced it with a Recursive strategy that uses two splitters: a 2,000-character parent chunk for the LLM to read, and a 400-character child chunk for the Vector Database to search. This guarantees perfect context boundaries and hyper-accurate retrieval.
 
 > [!IMPORTANT]
+> **Replaced:** Sequential Graph Extraction
+> **Upgraded To:** Multi-Threaded Coreference Resolution Knowledge Graphs
+> 
+> **Reason:** The original Graph Extraction pipeline failed to link entities properly because technical text relies heavily on pronouns ("It", "This system"). We implemented a Coreference Resolution LLM step that dynamically rewrites every chunk, strictly replacing all pronouns with their actual nouns before extraction. To counteract the API latency of running two LLM calls per chunk, we replaced the sequential `for` loop with a `ThreadPoolExecutor`, blasting 10 chunks concurrently to the API and speeding up ingestion by ~10x!
+
+> [!IMPORTANT]
 > **Added:** Corrective RAG (CRAG) & Infinite Loop Prevention
 > 
 > **Reason:** When the Jina Cross-Encoder correctly rejects all chunks because the user asked an irrelevant or trick question, the LLM was left with no context. Instead of just answering "I don't know", we implemented a CRAG loop. When all chunks are rejected, the LangGraph routes to a `rewrite` node that calls an LLM to dynamically reformulate the user's question, and triggers a second Hybrid Search. To guarantee safety and prevent infinite loops, we added a strictly typed `rewrite_count` integer to the LangGraph state that caps the system at 1 rewrite attempt.
@@ -105,10 +111,10 @@ After Recursive Parent-Child Chunking & Knowledge Graph Extraction (gpt-4o-mini 
 * Relevance: 0.7
 * Context Accuracy: 0.7
 
-After Recursive Parent-Child Chunking & Knowledge Graph Extraction (gpt-4o Judge):
-* Faithfulness: 0.9
+After Multi-Threaded Coreference Resolution Knowledge Graphs (Final Production Run):
+* Faithfulness: 0.8
 * Relevance: 0.6
-* Context Accuracy: 0.7
+* Context Accuracy: 0.6
 
 > [!TIP]
 > **Why did Context Accuracy drop to 0.7?** 

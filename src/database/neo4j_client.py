@@ -13,7 +13,13 @@ class Neo4jManager:
         if not uri or not password:
             raise ValueError("NEO4J_URI and NEO4J_PASSWORD must be provided.")
             
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        self.driver = GraphDatabase.driver(
+            uri, 
+            auth=(user, password),
+            max_connection_lifetime=200, # Aura drops at ~300s
+            keep_alive=True,
+            max_connection_pool_size=50
+        )
 
     def close(self):
         self.driver.close()

@@ -61,16 +61,19 @@ def graph_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
     try:
         session = neo4j_manager.get_session()
         words = [word.lower() for word in query.replace("?", "").split() if len(word) > 2]
-        query_str = """
-        MATCH (e1:Entity)-[r:RELATION]->(e2:Entity)
-        WHERE e1.tenantId = $tenant_id
-        AND ANY(word IN $words WHERE toLower(e1.name) CONTAINS word OR toLower(e2.name) CONTAINS word)
-        RETURN e1.name + ' ' + r.type + ' ' + e2.name AS content
-        LIMIT $top_k
-        """
-        res = session.run(query_str, tenant_id=tenant_id, words=words, top_k=top_k)
-        for record in res:
-            results.append({"content": record["content"]})
+        def _read_tx(tx, t_id, wds, tk):
+            q_str = """
+            MATCH (e1:Entity)-[r:RELATION]->(e2:Entity)
+            WHERE e1.tenantId = $tenant_id
+            AND ANY(word IN $words WHERE toLower(e1.name) CONTAINS word OR toLower(e2.name) CONTAINS word)
+            RETURN e1.name + ' ' + r.type + ' ' + e2.name AS content
+            LIMIT $top_k
+            """
+            return [record["content"] for record in tx.run(q_str, tenant_id=t_id, words=wds, top_k=tk)]
+            
+        res = session.execute_read(_read_tx, tenant_id, words, top_k)
+        for content in res:
+            results.append({"content": content})
         session.close()
     except Exception as e:
         print(f"Graph search failed: {e}")
@@ -99,7 +102,7 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
             
     add_to_scores(vector_res, base_weight=2.0)  # Boost vector semantics
     add_to_scores(keyword_res, base_weight=1.5) # Re-boost keyword for exact matches like im4gn.4xlarge
-    add_to_scores(graph_res, base_weight=1.0)
+    add_to_scores(graph_res, base_weight=0.3)
     
     # Sort descending by RRF score
     sorted_contents = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)

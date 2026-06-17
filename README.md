@@ -55,7 +55,7 @@ graph TD
 4. **Hybrid Retrieval:** The system simultaneously queries three databases:
    - **Vector Search** (Cosine similarity via pgvector)
    - **Keyword Search** (BM25 Full Text Search)
-   - **Knowledge Graph** (Cypher queries via Neo4j)
+   - **Knowledge Graph** (Coreference Resolution + Cypher queries via Neo4j)
 5. **Reciprocal Rank Fusion (RRF):** The results from all three databases are mathematically fused together to surface the absolute best chunks, giving a 1.5x score boost to chunks where the search keywords match the Markdown Header.
 6. **Cross-Encoder Reranking:** The top 10 chunks are passed to the strict `jina-reranker-v2`. Any chunk that scores below `0.05` is instantly deleted to prevent hallucinations.
 7. **Corrective RAG (CRAG) Loop:** If the Reranker deletes *all* the chunks, the system intercepts the failure. Instead of answering "I don't know," an LLM dynamically rewrites the user's query and loops back to Step 4. (This is capped at 1 rewrite attempt to prevent infinite loops).

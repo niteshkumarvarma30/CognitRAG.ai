@@ -60,11 +60,59 @@ You MUST reply with ONLY raw JSON in this exact format. Do NOT wrap it in markdo
     parsed = json.loads(raw_text)
     return GraphExtraction(**parsed)
 
-def process_graph_track_sync(tenant_id: str, document_id: str, chunks: list[tuple[str, str]]):
-    """Extracts entities/relationships via LLM and merges them into Neo4j securely."""
-    session = neo4j_manager.get_session()
-    
+def resolve_coreferences(chunk: str) -> str:
+    """Uses LLM to replace pronouns with their actual entities before extraction."""
+    response = client.chat.completions.create(
+        model="sarvam-30b",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a precise technical editor. Rewrite the following text by replacing all pronouns (it, they, this, these, etc.) and vague references with the exact proper nouns or entities they refer to based on the context. Do not summarize or change the meaning. Return ONLY the rewritten text."
+            },
+            {
+                "role": "user",
+                "content": f"Text:\n{chunk}"
+            }
+        ],
+        temperature=0.0
+    )
+    return response.choices[0].message.content
+
+import concurrent.futures
+
+def process_single_chunk(chunk: str, tenant_id: str):
+    """Processes a single chunk in its own thread with its own Neo4j session."""
     try:
+        print("    -> Resolving Coreferences...")
+        resolved_chunk = resolve_coreferences(chunk)
+        
+        print("    -> Extracting Graph Entities...")
+        graph_data = extract_graph_from_chunk(resolved_chunk)
+        
+        with neo4j_manager.driver.session() as session:
+            # Merge Entities
+            for ent in graph_data.entities:
+                session.run("""
+                    MERGE (e:Entity {name: $name, tenantId: $tenant_id})
+                    ON CREATE SET e.type = $type
+                    WITH e
+                    MATCH (t:Tenant {id: $tenant_id})
+                    MERGE (e)-[:BELONGS_TO]->(t)
+                """, name=ent.name, type=ent.type, tenant_id=tenant_id)
+            
+            # Merge Relationships
+            for rel in graph_data.relationships:
+                session.run("""
+                    MATCH (s:Entity {name: $source, tenantId: $tenant_id})
+                    MATCH (t:Entity {name: $target, tenantId: $tenant_id})
+                    MERGE (s)-[r:RELATION {type: $rel_type}]->(t)
+                """, source=rel.source_entity, target=rel.target_entity, rel_type=rel.relation_type, tenant_id=tenant_id)
+    except Exception as e:
+        print(f"Failed to extract graph for a chunk: {e}")
+
+def process_graph_track_sync(tenant_id: str, document_id: str, chunks: list[tuple[str, str]]):
+    """Extracts entities/relationships via LLM and merges them into Neo4j securely using Multi-Threading."""
+    with neo4j_manager.driver.session() as session:
         # First ensure the Tenant node exists
         session.run("MERGE (t:Tenant {id: $tenant_id})", tenant_id=tenant_id)
         
@@ -77,34 +125,12 @@ def process_graph_track_sync(tenant_id: str, document_id: str, chunks: list[tupl
             MERGE (d)-[:BELONGS_TO]->(t)
         """, doc_id=document_id, tenant_id=tenant_id)
 
-        # Extract unique parent chunks to avoid redundant LLM calls
-        unique_parents = list(set([parent for parent, child in chunks]))
-        
-        for chunk in unique_parents:
-            try:
-                # 1. LLM Extraction
-                graph_data = extract_graph_from_chunk(chunk)
-                
-                # 2. Merge Entities
-                for ent in graph_data.entities:
-                    session.run("""
-                        MERGE (e:Entity {name: $name, tenantId: $tenant_id})
-                        ON CREATE SET e.type = $type
-                        WITH e
-                        MATCH (t:Tenant {id: $tenant_id})
-                        MERGE (e)-[:BELONGS_TO]->(t)
-                    """, name=ent.name, type=ent.type, tenant_id=tenant_id)
-                
-                # 3. Merge Relationships
-                for rel in graph_data.relationships:
-                    session.run("""
-                        MATCH (s:Entity {name: $source, tenantId: $tenant_id})
-                        MATCH (t:Entity {name: $target, tenantId: $tenant_id})
-                        MERGE (s)-[r:RELATION {type: $rel_type}]->(t)
-                    """, source=rel.source_entity, target=rel.target_entity, rel_type=rel.relation_type, tenant_id=tenant_id)
-
-            except Exception as e:
-                print(f"Failed to extract graph for a chunk: {e}")
-
-    finally:
-        session.close()
+    # Extract unique parent chunks to avoid redundant LLM calls
+    unique_parents = list(set([parent for parent, child in chunks]))
+    
+    print(f"Starting multi-threaded graph extraction for {len(unique_parents)} chunks...")
+    
+    # Process all chunks in parallel (max 10 threads)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(process_single_chunk, chunk, tenant_id) for chunk in unique_parents]
+        concurrent.futures.wait(futures)
