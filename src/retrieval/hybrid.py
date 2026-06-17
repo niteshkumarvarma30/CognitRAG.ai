@@ -14,7 +14,7 @@ def get_embedding(text: str) -> list[float]:
     )
     return response.data[0].embedding
 
-def vector_search(tenant_id: str, query: str, top_k: int = 10) -> list[dict]:
+def vector_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
     """Cosine Similarity search using pgvector via custom RPC."""
     db = supabase_manager.get_tenant_client(tenant_id)
     try:
@@ -29,23 +29,33 @@ def vector_search(tenant_id: str, query: str, top_k: int = 10) -> list[dict]:
         print(f"Vector search failed: {e}")
         return []
 
-def keyword_search(tenant_id: str, query: str, top_k: int = 10) -> list[dict]:
+def keyword_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
     """BM25 equivalent using Postgres Full Text Search."""
     db = supabase_manager.get_tenant_client(tenant_id)
-    # Basic Postgres FTS uses '&' for AND logic. 
-    fts_query = " & ".join([word for word in query.replace("?", "").split() if word])
     try:
+        # The python client does not support type='websearch', so we manually build an OR query
+        words = [word.lower() for word in query.replace("?", "").replace(",", "").split() if len(word) > 3]
+        if not words:
+            return []
+        fts_query = " | ".join(words)
+        
         response = db.table("document_chunks") \
             .select("id, content") \
             .eq("tenant_id", tenant_id) \
             .text_search("content", fts_query) \
             .execute()
-        return response.data[:top_k] if response.data else []
+            
+        results = []
+        if response.data:
+            for row in response.data[:top_k]:
+                row["boost_factor"] = 1.0
+                results.append(row)
+        return results
     except Exception as e:
         print(f"Keyword search failed: {e}")
         return []
 
-def graph_search(tenant_id: str, query: str, top_k: int = 10) -> list[dict]:
+def graph_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
     """Neo4j search matching query words to entities and pulling relationships."""
     results = []
     try:
@@ -73,24 +83,29 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
     """
     scores = {}
     
-    def add_to_scores(results, weight=1.0):
+    def add_to_scores(results, base_weight=1.0):
         for rank, res in enumerate(results):
             content = res.get("content", "")
             if not content:
                 continue
+                
+            # Apply dynamic title boost factor if it exists
+            boost = res.get("boost_factor", 1.0)
+            final_weight = base_weight * boost
+            
             if content not in scores:
                 scores[content] = 0.0
-            scores[content] += weight * (1.0 / (k + rank + 1))
+            scores[content] += final_weight * (1.0 / (k + rank + 1))
             
-    add_to_scores(vector_res, weight=1.0)
-    add_to_scores(keyword_res, weight=1.5)  # Boost exact keyword matches
-    add_to_scores(graph_res, weight=1.0)
+    add_to_scores(vector_res, base_weight=2.0)  # Boost vector semantics
+    add_to_scores(keyword_res, base_weight=1.5) # Re-boost keyword for exact matches like im4gn.4xlarge
+    add_to_scores(graph_res, base_weight=1.0)
     
     # Sort descending by RRF score
     sorted_contents = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
     return sorted_contents
 
-def hybrid_retriever(tenant_id: str, query: str, top_k: int = 15) -> str:
+def hybrid_retriever(tenant_id: str, query: str, top_k: int = 10) -> str:
     """Executes all 3 searches and fuses them with RRF."""
     print("  -> Running Vector Search (Cosine)...")
     v_res = vector_search(tenant_id, query)

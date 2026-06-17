@@ -4,7 +4,20 @@ from fastapi.staticfiles import StaticFiles
 from src.api.routes import router
 import os
 
-app = FastAPI(title="Hybrid RAG SaaS API")
+import mlflow
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Initializing MLflow...")
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    # Removed setting the deleted experiment to prevent startup crashes
+    
+    # Disable autologging during batch evaluation to prevent 15-minute delays
+    # mlflow.langchain.autolog()
+    yield
+
+app = FastAPI(title="Hybrid RAG SaaS API", lifespan=lifespan)
 
 # Add CORS so the widget can be embedded on any external customer domain securely
 app.add_middleware(

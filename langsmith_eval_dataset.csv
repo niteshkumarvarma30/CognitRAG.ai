@@ -1,0 +1,16 @@
+tenant_id,question,expected_answer
+11111111-1111-1111-1111-111111111111,What is the default value of the transform_null_equals option?,The default value is off.
+11111111-1111-1111-1111-111111111111,Why is transform_null_equals turned off by default?,Because the correct SQL-spec-compliant behavior of expr = NULL is to always return null (unknown).
+11111111-1111-1111-1111-111111111111,What are developer options used for?,They are used for internal debugging and testing.
+11111111-1111-1111-1111-111111111111,Who should turn on transform_null_equals?,"Users of filtered forms in Microsoft Access, which generate queries that appear to use expr = NULL to test for null values."
+11111111-1111-1111-1111-111111111111,What is Nomenclature?,I do not have information about Nomenclature in my context.
+22222222-2222-2222-2222-222222222222,What is Nomenclature?,"Nomenclature refers to a glossary section that defines key terms like Errata, QDF Number, Specification Changes, Specification Clarifications, and Documentation Changes."
+22222222-2222-2222-2222-222222222222,What is the workaround for WCL001?,None identified.
+22222222-2222-2222-2222-222222222222,What is a QDF Number?,A several digit code used to distinguish between engineering samples for qualification and early design validation.
+22222222-2222-2222-2222-222222222222,What is the implication of WCL012?,Software monitoring these events will observe counts that are two times the actual value.
+22222222-2222-2222-2222-222222222222,How does Aurora Serverless scale?,I do not have information about Aurora Serverless in my context.
+33333333-3333-3333-3333-333333333333,What is Aurora Serverless v2?,"Aurora Serverless v2 is an on-demand, autoscaling configuration for Amazon Aurora that automatically scales compute capacity based on your application demand."
+33333333-3333-3333-3333-333333333333,What is an ACU?,"An Aurora Capacity Unit (ACU) is a combination of processing and memory capacity. Each ACU is a combination of approximately 2 gigabytes (GB) of memory, corresponding CPU, and networking."
+33333333-3333-3333-3333-333333333333,How quickly does Aurora Serverless v2 scale up?,"It scales up in a fraction of a second, adding capacity in increments as small as 0.5 ACUs."
+33333333-3333-3333-3333-333333333333,How does it scale down?,It scales down more gradually than it scales up to avoid disrupting ongoing connections and queries.
+33333333-3333-3333-3333-333333333333,What is the workaround for WCL001?,I do not have information about WCL001 in my context.

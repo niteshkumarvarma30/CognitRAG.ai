@@ -60,7 +60,7 @@ You MUST reply with ONLY raw JSON in this exact format. Do NOT wrap it in markdo
     parsed = json.loads(raw_text)
     return GraphExtraction(**parsed)
 
-def process_graph_track_sync(tenant_id: str, document_id: str, chunks: list[str]):
+def process_graph_track_sync(tenant_id: str, document_id: str, chunks: list[tuple[str, str]]):
     """Extracts entities/relationships via LLM and merges them into Neo4j securely."""
     session = neo4j_manager.get_session()
     
@@ -77,7 +77,10 @@ def process_graph_track_sync(tenant_id: str, document_id: str, chunks: list[str]
             MERGE (d)-[:BELONGS_TO]->(t)
         """, doc_id=document_id, tenant_id=tenant_id)
 
-        for chunk in chunks:
+        # Extract unique parent chunks to avoid redundant LLM calls
+        unique_parents = list(set([parent for parent, child in chunks]))
+        
+        for chunk in unique_parents:
             try:
                 # 1. LLM Extraction
                 graph_data = extract_graph_from_chunk(chunk)

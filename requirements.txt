@@ -11,3 +11,5 @@ langchain-text-splitters
 openai
 instructor
 python-multipart
+mlflow
+pymupdf4llm

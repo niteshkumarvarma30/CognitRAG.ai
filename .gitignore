@@ -4,3 +4,5 @@ __pycache__/
 *.pdf
 search_results.txt
 *.log
+mlruns/
+mlflow.db
