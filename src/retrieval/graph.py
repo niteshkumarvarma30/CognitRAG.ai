@@ -41,7 +41,7 @@ workflow.add_edge("retrieve", "grade_documents")
 workflow.add_conditional_edges("grade_documents", decide_grade, {"generate": "generate", "rewrite": "rewrite"})
 
 workflow.add_edge("rewrite", "retrieve")
-workflow.add_edge("generate", "save_memory")
+workflow.add_edge("generate", END)
 workflow.add_edge("save_memory", END)
 
 crag_app = workflow.compile()

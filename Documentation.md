@@ -63,6 +63,12 @@ As we built this SaaS, we hit several technical bottlenecks that required archit
 > **Upgraded To:** Hybrid Graph + Vector + BM25
 > 
 > **Reason:** Standard Vector search routinely fails on highly technical SaaS documentation because it doesn't understand acronyms or code variables. By fusing BM25 (keyword matching) and Neo4j (relationship mapping) with Vectors, the AI can cross-reference concepts perfectly.
+>
+> **The Exact Problem Graph RAG Solves:**
+> Normal Vector RAG suffers from **"Chunk Boundary Context Starvation"**. For example, in our PostgreSQL manual, the heading `16.4.12 Customized Options` was stored in Chunk A. The actual variable name `custom_variable_classes` was stored in Chunk B. 
+> * If a user asked "tell me everything about Customized Options", standard Vector Search would only retrieve Chunk A, and the AI would say "I don't know the specific options" because Chunk A lacked the details.
+> * Standard Keyword Search would fail because the word "Customized Options" didn't exist in Chunk B.
+> * **Graph RAG completely solves this** by extracting the relationship `(Customized Options)-[:HAS_VARIABLE]->(custom_variable_classes)` during ingestion. When the user asks about Customized Options, the Graph Retriever instantly pulls this relationship, mathematically bridging the gap between Chunk A and Chunk B and allowing the LLM to provide a flawless, comprehensive answer.
 
 > [!TIP]
 > **Added:** Hierarchical Title Boosting
@@ -91,6 +97,39 @@ As we built this SaaS, we hit several technical bottlenecks that required archit
 > **Added:** Corrective RAG (CRAG) & Infinite Loop Prevention
 > 
 > **Reason:** When the Jina Cross-Encoder correctly rejects all chunks because the user asked an irrelevant or trick question, the LLM was left with no context. Instead of just answering "I don't know", we implemented a CRAG loop. When all chunks are rejected, the LangGraph routes to a `rewrite` node that calls an LLM to dynamically reformulate the user's question, and triggers a second Hybrid Search. To guarantee safety and prevent infinite loops, we added a strictly typed `rewrite_count` integer to the LangGraph state that caps the system at 1 rewrite attempt.
+
+> [!IMPORTANT]
+> **Replaced:** Synchronous Response Generation
+> **Upgraded To:** LangGraph Native Asynchronous Streaming
+> 
+> **Reason:** Initially, the LLM generated the entire answer synchronously, causing the UI to hang for seconds. We replaced the raw OpenAI stream loop with LangGraph's native `astream` (messages mode). By directly linking the graph's `RunnableConfig` to LangChain's `ChatOpenAI` wrapper, tokens instantly bubble up through Server-Sent Events (SSE) with an artificial 10ms typing delay, vastly improving perceived UX latency.
+
+> [!TIP]
+> **Optimized:** RRF Payload Reduction
+> 
+> **Reason:** The parallel retrievers were originally fetching the Top 10 chunks each, flooding the RRF algorithm and Grader Node with excessive context. We slashed the `top_k` chunk limit from 10 to 5. This drastically reduced the payload size hitting the Jina Reranker, dropping latency without sacrificing accuracy since RRF mathematically prioritizes the best chunks anyway.
+
+> [!IMPORTANT]
+> **Replaced:** Sarvam-30B Response Generator
+> **Upgraded To:** gpt-4o-mini (GitHub Models API)
+> 
+> **Reason:** To achieve flawless stream delivery and better instruction adherence, we swapped the final response generator to `gpt-4o-mini` using the LangChain `ChatOpenAI` wrapper. This provides hyper-fast token generation capabilities perfectly compatible with LangGraph's native event stream.
+
+> [!WARNING]
+> **Replaced:** Raw Graph Relationship Strings (e.g., `A HAS_VARIABLE B`)
+> **Upgraded To:** Natural Language Graph Context
+> 
+> **Reason:** When the Hybrid Retriever passed raw Cypher relationships to the LLM (like `Customized Options HAS_VARIABLE custom_variable_classes`), the LLM routinely ignored it, assuming it was internal system metadata that shouldn't be shown to the user. We rewrote the Cypher `RETURN` statement to dynamically translate edges into natural language (`Customized Options has the following relationship: HAS_VARIABLE with custom_variable_classes`). This simple syntax swap forced the LLM to treat the Graph results as valid, user-facing knowledge, bridging massive semantic gaps across chunk boundaries.
+
+> [!CAUTION]
+> **Identified Vulnerability:** Semantic Cache "State Poisoning"
+> 
+> **Lesson Learned:** While our 95% similarity Semantic Cache dropped retrieval latency to 0ms, it created a severe debugging blindspot. During development, when an upstream API failed and the LLM safely answered "I don't know", the cache permanently saved that bad response. Even after we completely rebuilt and fixed the Graph database, the system kept answering "I don't know" because the Semantic Cache intercepted the query before it could hit the newly repaired pipeline. We learned that Semantic Caches must be explicitly cleared or bypassed during active prompt/pipeline engineering.
+
+> [!WARNING]
+> **Identified Vulnerability:** Graph Ingestion Rate Limiting
+> 
+> **Lesson Learned:** Unlike Vector embedding (which batches thousands of chunks into a single API call), building a Coreference-Resolved Knowledge Graph requires *two separate LLM inference calls per chunk*. Processing a 3000-page PDF generated over 2,600 individual API requests in seconds. This instantly blew through the free-tier daily rate limits of standard API providers (like GitHub Models' 150-request daily cap), causing silent background worker crashes and empty Neo4j databases. We learned that Graph Ingestion pipelines must be powered by Enterprise-tier API keys or models with massive throughput allowances (like Gemini 2.5 Flash or Groq).
 
 ## 3. Automated Evaluation Pipeline
 To guarantee the quality of the RAG system over time, we built a local automated evaluation pipeline (run_mlflow_eval.py). It uses an LLM-as-a-Judge (gpt-4o via GitHub Models API) to automatically grade the RAG API against a synthetic dataset of questions and expected answers. The results are logged directly to the local MLflow dashboard.

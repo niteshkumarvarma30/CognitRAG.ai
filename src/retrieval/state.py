@@ -12,3 +12,5 @@ class GraphState(TypedDict):
     preferences: dict
     summary: str
     rewrite_count: int
+    system_prompt: str
+    context_block: str

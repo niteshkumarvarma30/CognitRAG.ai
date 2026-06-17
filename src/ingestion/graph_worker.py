@@ -5,10 +5,11 @@ from pydantic import BaseModel, Field
 from typing import List
 from src.database.neo4j_client import neo4j_manager
 
-client = OpenAI(
+sarvam_client = OpenAI(
     api_key=os.environ.get("SARVAM_API_KEY", ""),
     base_url="https://api.sarvam.ai/v1"
 )
+instructor_client = instructor.from_openai(sarvam_client, mode=instructor.Mode.JSON)
 
 # Define the precise JSON schema we want Claude/GPT to extract
 class Entity(BaseModel):
@@ -25,23 +26,13 @@ class GraphExtraction(BaseModel):
     relationships: List[Relationship]
 
 def extract_graph_from_chunk(chunk: str) -> GraphExtraction:
-    import json
-    response = client.chat.completions.create(
+    return instructor_client.chat.completions.create(
         model="sarvam-30b",
+        response_model=GraphExtraction,
         messages=[
             {
                 "role": "system", 
-                "content": """You are a highly precise technical knowledge graph extractor. 
-Extract core entities and their relationships from the provided text.
-You MUST reply with ONLY raw JSON in this exact format. Do NOT wrap it in markdown block quotes (```json).
-{
-  "entities": [
-    {"name": "Entity1", "type": "Component"}
-  ],
-  "relationships": [
-    {"source_entity": "Entity1", "target_entity": "Entity2", "relation_type": "DEPENDS_ON"}
-  ]
-}"""
+                "content": "You are a highly precise technical knowledge graph extractor. Extract core entities and their relationships from the provided text."
             },
             {
                 "role": "user", 
@@ -50,19 +41,10 @@ You MUST reply with ONLY raw JSON in this exact format. Do NOT wrap it in markdo
         ],
         temperature=0.1
     )
-    
-    raw_text = response.choices[0].message.content.strip()
-    if raw_text.startswith("```json"):
-        raw_text = raw_text[7:-3].strip()
-    elif raw_text.startswith("```"):
-        raw_text = raw_text[3:-3].strip()
-        
-    parsed = json.loads(raw_text)
-    return GraphExtraction(**parsed)
 
 def resolve_coreferences(chunk: str) -> str:
     """Uses LLM to replace pronouns with their actual entities before extraction."""
-    response = client.chat.completions.create(
+    response = sarvam_client.chat.completions.create(
         model="sarvam-30b",
         messages=[
             {

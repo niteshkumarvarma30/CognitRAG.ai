@@ -6,7 +6,7 @@ This is a Retrieval-Augmented Generation (RAG) platform with strict Multi-Tenanc
 - **Multi-Tenant Isolation:** Supabase Row Level Security (RLS) ensures chunks are completely isolated.
 - **Hybrid Search (RRF):** Fuses Vector Search (Jina Embeddings in pgvector), Keyword Search (Postgres FTS), and Graph Search (Neo4j Cypher).
 - **Agentic Routing:** Uses LangGraph and Groq (`llama-3.1-8b-instant`) to classify user intents (Greeting vs Technical), grade documents, and rewrite bad queries.
-- **Generative Chat:** Uses `gpt-4o-mini` (via GitHub Models) to synthesize answers seamlessly with LangGraph native asynchronous token streaming.
+- **Generative Chat:** Uses `sarvam-30b` to synthesize answers seamlessly with LangGraph native asynchronous token streaming.
 
 ## Workflow Diagram
 
@@ -38,7 +38,7 @@ graph TD
     %% Evaluation & Corrective RAG
     RRF --> Grader{"Jina Cross-Encoder<br/>Reranker Threshold"}
     
-    Grader -->|Score >= 0.05| Generator["Response Generator<br/>(gpt-4o-mini)"]
+    Grader -->|Score >= 0.05| Generator["Response Generator<br/>(sarvam-30b)"]
     Grader -->|Score < 0.05| Rewriter{"CRAG Rewrite Node<br/>(Rewrite Count < 1?)"}
     
     Rewriter -->|Yes| RewriteLLM["Query Rewriter<br/>(Sarvam-105B)"]
@@ -63,7 +63,7 @@ graph TD
 5. **Reciprocal Rank Fusion (RRF):** The results from all three databases are mathematically fused together to surface the absolute best chunks, giving a 1.5x score boost to chunks where the search keywords match the Markdown Header.
 6. **Cross-Encoder Reranking:** The top 10 chunks are passed to the strict `jina-reranker-v2`. Any chunk that scores below `0.05` is instantly deleted to prevent hallucinations.
 7. **Corrective RAG (CRAG) Loop:** If the Reranker deletes *all* the chunks, the system intercepts the failure. Instead of answering "I don't know," an LLM dynamically rewrites the user's query and loops back to Step 4. (This is capped at 1 rewrite attempt to prevent infinite loops).
-8. **Generation & Memory Distillation:** The validated chunks are passed to `gpt-4o-mini` to generate the final answer via real-time SSE token streaming. In the background, an LLM distills the interaction into a short summary and saves it back to the `episodic_memory` table for the next visit. New answers are also instantly saved to the `semantic_cache` table for 0ms lookup on future identical queries.
+8. **Generation & Memory Distillation:** The validated chunks are passed to `sarvam-30b` to generate the final answer via real-time SSE token streaming. In the background, an LLM distills the interaction into a short summary and saves it back to the `episodic_memory` table for the next visit. New answers are also instantly saved to the `semantic_cache` table for 0ms lookup on future identical queries.
 
 ### Stateful AI Memory (Handling Session Restarts)
 To prevent the LLM's context window from blowing up with massive raw chat logs, the system uses a **Distill & Inject** architecture across session boundaries:

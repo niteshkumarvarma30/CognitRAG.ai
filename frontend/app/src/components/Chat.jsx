@@ -56,7 +56,28 @@ export default function Chat({ tenantId }) {
               try {
                 const data = JSON.parse(line.replace('data: ', ''));
                 if (data.status === 'done') {
-                  setMessages(prev => [...prev, { role: 'assistant', content: data.answer, context: data.context }]);
+                  setMessages(prev => {
+                      const newMsgs = [...prev];
+                      if (newMsgs.length > 0 && newMsgs[newMsgs.length - 1].isStreaming) {
+                          newMsgs[newMsgs.length - 1] = { role: 'assistant', content: data.answer, context: data.context };
+                      } else {
+                          newMsgs.push({ role: 'assistant', content: data.answer, context: data.context });
+                      }
+                      return newMsgs;
+                  });
+                  setWorkflowStatus('');
+                } else if (data.token !== undefined) {
+                  setMessages(prev => {
+                      const newMsgs = [...prev];
+                      if (newMsgs.length > 0 && newMsgs[newMsgs.length - 1].isStreaming) {
+                          const lastMsg = { ...newMsgs[newMsgs.length - 1] };
+                          lastMsg.content += data.token;
+                          newMsgs[newMsgs.length - 1] = lastMsg;
+                      } else {
+                          newMsgs.push({ role: 'assistant', content: data.token, isStreaming: true });
+                      }
+                      return newMsgs;
+                  });
                   setWorkflowStatus('');
                 } else {
                   setWorkflowStatus(data.status);

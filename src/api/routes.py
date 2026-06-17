@@ -80,7 +80,7 @@ async def chat_stream_endpoint(request: ChatRequest):
     }
     
     async def event_generator():
-        full_state = {}
+        full_state = initial_state.copy()
         answer = ""
         import asyncio
         
@@ -90,7 +90,7 @@ async def chat_stream_endpoint(request: ChatRequest):
                 if msg.content and meta.get("langgraph_node") == "generate":
                     token = msg.content
                     answer += token
-                    await asyncio.sleep(0.01)  # Add typing effect delay
+                    await asyncio.sleep(0.07)  # Add typing effect delay
                     yield f"data: {json.dumps({'token': token})}\n\n"
                     
             elif mode == "updates":

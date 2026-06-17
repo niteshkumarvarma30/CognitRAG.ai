@@ -66,7 +66,7 @@ def graph_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
             MATCH (e1:Entity)-[r:RELATION]->(e2:Entity)
             WHERE e1.tenantId = $tenant_id
             AND ANY(word IN $words WHERE toLower(e1.name) CONTAINS word OR toLower(e2.name) CONTAINS word)
-            RETURN e1.name + ' ' + r.type + ' ' + e2.name AS content
+            RETURN e1.name + ' has the following relationship: ' + r.type + ' with ' + e2.name AS content
             LIMIT $top_k
             """
             return [record["content"] for record in tx.run(q_str, tenant_id=t_id, words=wds, top_k=tk)]
@@ -110,7 +110,7 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
 
 import concurrent.futures
 
-def hybrid_retriever(tenant_id: str, query: str, top_k: int = 10) -> str:
+def hybrid_retriever(tenant_id: str, query: str, top_k: int = 5) -> str:
     """Executes all 3 searches in parallel and fuses them with RRF."""
     print("  -> Running Hybrid Search (Vector + Keyword + Graph) in Parallel...")
     

@@ -31,6 +31,9 @@ sarvam_instructor = instructor.from_openai(gen_client)
 # Create a separate instructor client specifically for Sarvam to handle structured Pydantic outputs
 sarvam_instructor = instructor.from_openai(gen_client)
 
+# Create the instructor client for Github Models (gpt-4o-mini)
+instructor_client = instructor.from_openai(github_client)
+
 class RouteDecision(BaseModel):
     intent: str = Field(description="Must be exactly 'greeting', 'faq', or 'technical_query'")
 
@@ -54,7 +57,7 @@ def check_cache(state):
         db = supabase_manager.get_tenant_client(tenant_id)
         
         response = db.rpc("match_semantic_cache", {
-            "query_embedding": query_embedding,
+            "p_query_embedding": query_embedding,
             "p_tenant_id": tenant_id,
             "match_threshold": 0.95
         }).execute()
@@ -76,11 +79,11 @@ def route_query(state):
     print("--- ROUTING QUERY VIA SARVAM-105B ---")
     question = state["question"]
     try:
-        decision = sarvam_instructor.chat.completions.create(
-            model="sarvam-105b",
+        decision = instructor_client.chat.completions.create(
+            model="gpt-4o-mini",
             response_model=RouteDecision,
             messages=[
-                {"role": "system", "content": "Classify the intent of the user query. ONLY return 'greeting' or 'faq' for pure small talk (like 'hello', 'who are you'). ALL other queries asking about systems, compatibility, developers, features, or documents MUST be classified as 'technical_query'."},
+                {"role": "system", "content": "Classify the intent of the user query. ONLY return 'greeting' or 'faq' for pure small talk (like 'hello', 'who are you'). ALL other queries asking about systems, compatibility, developers, features, documents, or ANY follow-up questions (like 'what did we talk about', 'tell me more') MUST be classified as 'technical_query'."},
                 {"role": "user", "content": question}
             ]
         )
@@ -98,7 +101,7 @@ def retrieve(state):
     question = state["question"]
     tenant_id = state["tenant_id"]
     
-    docs = hybrid_retriever(tenant_id, question)
+    docs = hybrid_retriever(tenant_id, question, top_k=10)
     return {"documents": docs}
 
 @traceable(name="grade_documents")
@@ -135,7 +138,7 @@ def grade_documents(state):
         # Sort results by relevance score descending just in case
         sorted_results = sorted(data.get("results", []), key=lambda x: x.get("relevance_score", 0), reverse=True)
         
-        for result in sorted_results[:3]:  # Keep top 3, but enforce threshold
+        for result in sorted_results[:5]:  # Keep top 5, but enforce threshold
             if result.get("relevance_score", 0) >= 0.05:
                 index = result.get("index")
                 filtered_chunks.append(chunks[index])
@@ -160,7 +163,12 @@ def generate(state, config):
     summary = state.get("summary", "")
     chat_history = state.get("chat_history", [])
     
-    system_prompt = "You are an expert SaaS support assistant. Answer the user's question using the provided Context, Previous Conversation Summary, and Recent Chat History. You must ONLY answer in English. If the provided information doesn't contain the answer, say you don't know."
+    system_prompt = (
+        "You are an expert SaaS support assistant. "
+        "Answer the user's question using the provided Context, Previous Conversation Summary, and Recent Chat History. "
+        "If the user asks about the conversation itself, answer using the Recent Chat History. "
+        "You must ONLY answer in English. If the answer cannot be found in ANY of the provided information, say exactly 'I don't know.'"
+    )
     
     if preferences:
         system_prompt += f"\n\nCRITICAL USER PREFERENCES YOU MUST FOLLOW:\n{preferences}"
@@ -184,10 +192,10 @@ def generate(state, config):
     import os
     
     llm = ChatOpenAI(
-        model="gpt-4o-mini",
+        model="sarvam-30b",
         temperature=0,
-        base_url="https://models.inference.ai.azure.com",
-        api_key=os.environ.get("GITHUB_TOKEN"),
+        base_url="https://api.sarvam.ai/v1",
+        api_key=os.environ.get("SARVAM_API_KEY"),
         streaming=True
     )
     
@@ -254,8 +262,8 @@ def save_memory(state):
         system_prompt = "You are a memory distillation AI. Given an existing summary and a new chat transcript, generate an updated, concise summary of the entire interaction. Focus on key facts, decisions, and context. Do NOT answer the user."
         prompt = f"Existing Summary: {current_summary}\n\nNew Transcript:\n{history_str}"
         
-        response = gen_client.chat.completions.create(
-            model="sarvam-105b",
+        response = github_client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
@@ -319,11 +327,19 @@ def contextualize_query(state):
             role = "User" if msg["role"] == "user" else "Assistant"
             history_str += f"{role}: {msg['content']}\n"
             
-        decision = sarvam_instructor.chat.completions.create(
-            model="sarvam-105b",
+        system_prompt = (
+            "Given a chat history and the latest user question "
+            "which might reference context in the chat history, formulate a standalone question "
+            "which can be understood without the chat history. Do NOT answer the question, "
+            "just reformulate it if needed and otherwise return it as is. "
+            "CRITICAL: Do NOT add generic phrases like 'in software development'. Maintain strict focus on the actual entities (like PostgreSQL) mentioned."
+        )
+            
+        decision = instructor_client.chat.completions.create(
+            model="gpt-4o-mini",
             response_model=RewrittenQuery,
             messages=[
-                {"role": "system", "content": "You are a query contextualizer. Given a conversation history and the latest user query, rewrite the user query to be a standalone question that can be understood without the history. Do NOT answer the question, just reformulate it."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Chat History:\n{history_str}\n\nLatest Query: {question}"}
             ]
         )
