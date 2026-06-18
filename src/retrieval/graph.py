@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, END
 from src.retrieval.state import GraphState
-from src.retrieval.nodes import route_query, retrieve, grade_documents, generate, rewrite, generate_cached, contextualize_query, load_memory, save_memory, check_cache
+from src.retrieval.nodes import route_query, retrieve, grade_documents, generate, rewrite, generate_cached, contextualize_query, load_memory, save_memory, check_cache, embed_query
 
 def decide_route(state):
     if state["route"] in ["greeting", "faq"]:
@@ -19,6 +19,7 @@ def decide_grade(state):
 
 workflow = StateGraph(GraphState)
 
+workflow.add_node("embed_query", embed_query)
 workflow.add_node("load_memory", load_memory)
 workflow.add_node("contextualize_query", contextualize_query)
 workflow.add_node("check_cache", check_cache)
@@ -30,7 +31,8 @@ workflow.add_node("rewrite", rewrite)
 workflow.add_node("generate_cached", generate_cached)
 workflow.add_node("save_memory", save_memory)
 
-workflow.set_entry_point("load_memory")
+workflow.set_entry_point("embed_query")
+workflow.add_edge("embed_query", "load_memory")
 workflow.add_edge("load_memory", "contextualize_query")
 workflow.add_edge("contextualize_query", "check_cache")
 workflow.add_conditional_edges("check_cache", decide_cache, {"save_memory": "save_memory", "route_query": "route_query"})

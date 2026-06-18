@@ -5,6 +5,7 @@ class GraphState(TypedDict):
     tenant_id: str
     user_id: str
     question: str
+    query_embedding: List[float]
     generation: str
     documents: str
     route: str
@@ -14,3 +15,5 @@ class GraphState(TypedDict):
     rewrite_count: int
     system_prompt: str
     context_block: str
+    rolling_context: str
+    user_facts: str

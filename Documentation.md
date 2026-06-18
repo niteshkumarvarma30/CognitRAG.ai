@@ -214,3 +214,19 @@ To scale the platform to production-grade performance, we engineered the retriev
 ### 6.3 Semantic Caching
 **The Concept:** If multiple employees ask similar questions (e.g., "What are the tax benefits?"), running the entire LLM pipeline repeatedly wastes thousands of tokens and seconds of compute.
 **Our Approach:** We built a `semantic_cache` table in Supabase. When a question is asked, a new LangGraph node (`check_cache`) instantly embeds the question and compares it against past queries. If the similarity exceeds 95%, the system completely bypasses the Retriever, Grader, and LLM Generator, instantly streaming the cached answer back to the frontend in ~0ms.
+
+### 6.4 Dynamic Token Budgeting
+**The Concept:** Passing a massive amount of context to an LLM can easily overflow its context window limit, causing the API to crash.
+**Our Approach:** `hybrid_retriever` now calculates the available context window size dynamically based on character counts. It ensures the system can pull up to 15 highly relevant chunks (instead of being strictly capped at 5) without ever overflowing the Sarvam-30B model's 8k token limit, maximizing context while guaranteeing safety.
+
+## 7. Advanced AI Memory Capabilities
+To further mimic human-like reasoning and continuous learning, we integrated advanced background memory processing.
+
+### 7.1 Vectorized Fact Extraction
+**Our Approach:** The backend uses Sarvam-30B (via `instructor` JSON mode) in a background thread to silently monitor every chat interaction. It extracts highly specific, discrete facts about the user's setup and preferences, vectorizes those facts with `jina-embeddings-v4`, and stores them in a dedicated `user_facts` Supabase table for long-term personalized recall.
+
+### 7.2 Graph-Based User Memory
+**Our Approach:** We extended the Neo4j Knowledge Graph to include users. When a user interacts with the system, it creates a `(User)` node and dynamically draws `[:ASKED_ABOUT]` edges between the User and the specific `(Entity)` nodes they are discussing. This allows the AI to "remember" what topics a user is historically interested in.
+
+### 7.3 Rolling Chat Summarization
+**Our Approach:** Storing full conversation transcripts indefinitely causes massive token bloat. If a user talks for a long time (exceeding 8 messages), the backend intercepts the oldest messages and silently distills them into a dense `rolling_context` paragraph. This rolling summary prevents memory bloat while preserving the vital continuity of the conversation.

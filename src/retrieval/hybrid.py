@@ -14,11 +14,10 @@ def get_embedding(text: str) -> list[float]:
     )
     return response.data[0].embedding
 
-def vector_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
+def vector_search(tenant_id: str, query: str, query_embedding: list[float], top_k: int = 20) -> list[dict]:
     """Cosine Similarity search using pgvector via custom RPC."""
     db = supabase_manager.get_tenant_client(tenant_id)
     try:
-        query_embedding = get_embedding(query)
         response = db.rpc("match_document_chunks", {
             "query_embedding": query_embedding,
             "match_count": top_k,
@@ -55,23 +54,31 @@ def keyword_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
         print(f"Keyword search failed: {e}")
         return []
 
-def graph_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
+def graph_search(tenant_id: str, user_id: str, query: str, top_k: int = 20) -> list[dict]:
     """Neo4j search matching query words to entities and pulling relationships."""
     results = []
     try:
         session = neo4j_manager.get_session()
         words = [word.lower() for word in query.replace("?", "").split() if len(word) > 2]
-        def _read_tx(tx, t_id, wds, tk):
-            q_str = """
+        def _read_tx(tx, t_id, u_id, wds, tk):
+            q_str1 = """
             MATCH (e1:Entity)-[r:RELATION]->(e2:Entity)
             WHERE e1.tenantId = $tenant_id
             AND ANY(word IN $words WHERE toLower(e1.name) CONTAINS word OR toLower(e2.name) CONTAINS word)
             RETURN e1.name + ' has the following relationship: ' + r.type + ' with ' + e2.name AS content
             LIMIT $top_k
             """
-            return [record["content"] for record in tx.run(q_str, tenant_id=t_id, words=wds, top_k=tk)]
+            q_str2 = """
+            MATCH (u:User {id: $u_id, tenantId: $tenant_id})-[r]->(e:Entity)
+            WHERE ANY(word IN $words WHERE toLower(e.name) CONTAINS word)
+            RETURN 'User has previously interacted with the topic: ' + e.name AS content
+            LIMIT $top_k
+            """
+            res1 = [record["content"] for record in tx.run(q_str1, tenant_id=t_id, words=wds, top_k=tk)]
+            res2 = [record["content"] for record in tx.run(q_str2, tenant_id=t_id, u_id=u_id, words=wds, top_k=tk)]
+            return res1 + res2
             
-        res = session.execute_read(_read_tx, tenant_id, words, top_k)
+        res = session.execute_read(_read_tx, tenant_id, user_id, words, top_k)
         for content in res:
             results.append({"content": content})
         session.close()
@@ -110,16 +117,16 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
 
 import concurrent.futures
 
-def hybrid_retriever(tenant_id: str, query: str, top_k: int = 5) -> str:
+def hybrid_retriever(tenant_id: str, user_id: str, query: str, query_embedding: list[float], top_k: int = 5) -> str:
     """Executes all 3 searches in parallel and fuses them with RRF."""
     print("  -> Running Hybrid Search (Vector + Keyword + Graph) in Parallel...")
     
     v_res, k_res, g_res = [], [], []
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        future_v = executor.submit(vector_search, tenant_id, query)
+        future_v = executor.submit(vector_search, tenant_id, query, query_embedding)
         future_k = executor.submit(keyword_search, tenant_id, query)
-        future_g = executor.submit(graph_search, tenant_id, query)
+        future_g = executor.submit(graph_search, tenant_id, user_id, query)
         
         v_res = future_v.result()
         k_res = future_k.result()
@@ -128,7 +135,26 @@ def hybrid_retriever(tenant_id: str, query: str, top_k: int = 5) -> str:
     print("  -> Applying Reciprocal Rank Fusion (RRF)...")
     fused_docs = compute_rrf(v_res, k_res, g_res)
     
-    top_contexts = fused_docs[:top_k]
+    # DYNAMIC TOKEN BUDGETING
+    # Sarvam-30B context window is 8192 tokens. Let's aim for max 6000 tokens for context to leave room for system prompt, history, and generation.
+    # 1 token ~= 4 characters roughly. So max_chars = 24000.
+    max_chars = 24000
+    current_chars = len(query) # base query length
+    
+    top_contexts = []
+    for doc in fused_docs:
+        doc_chars = len(doc)
+        if current_chars + doc_chars > max_chars:
+            print("  -> Token Budget Reached. Stopping retrieval to prevent context overflow.")
+            break
+        top_contexts.append(doc)
+        current_chars += doc_chars
+        # To prevent too many chunks from confusing the LLM even if they fit, cap at 15
+        if len(top_contexts) >= 15:
+            break
+            
+    print(f"  -> Dynamic Budgeting allocated {len(top_contexts)} chunks using approx {current_chars//4} tokens.")
+    
     if not top_contexts:
         return "No relevant context found."
         

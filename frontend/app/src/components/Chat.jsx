@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Database, Bot, User, Brain } from 'lucide-react';
+import { Send, Database, Bot, User, Brain, RefreshCw } from 'lucide-react';
 import { UserButton, useUser } from '@clerk/clerk-react';
 
 const API_BASE = 'http://localhost:8000/api/v1';
@@ -15,6 +15,24 @@ export default function Chat({ tenantId }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, workflowStatus]);
+
+  const handleResetMemory = async () => {
+    if (!window.confirm("Are you sure you want to clear your conversation memory? This will delete all facts, context, and graph relationships learned about you.")) return;
+    
+    setIsLoading(true);
+    setWorkflowStatus('Clearing Long-Term Memory...');
+    try {
+        await fetch(`${API_BASE}/memory/${tenantId}/${user.id}`, {
+            method: 'DELETE'
+        });
+        setMessages([]);
+    } catch (e) {
+        console.error("Failed to reset memory", e);
+    } finally {
+        setIsLoading(false);
+        setWorkflowStatus('');
+    }
+  };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -108,6 +126,27 @@ export default function Chat({ tenantId }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button 
+            onClick={handleResetMemory}
+            disabled={isLoading}
+            className="reset-memory-btn"
+            style={{ 
+                background: 'rgba(239, 68, 68, 0.1)', 
+                color: '#ef4444', 
+                border: '1px solid rgba(239, 68, 68, 0.2)', 
+                padding: '0.4rem 0.8rem', 
+                borderRadius: '6px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem',
+                cursor: 'pointer',
+                fontSize: '0.875rem'
+            }}
+            title="Clear Long-Term Memory & Chat"
+          >
+            <RefreshCw size={16} />
+            <span>Reset Memory</span>
+          </button>
           <div className="memory-badge">
             <Database size={16} />
             <span>Isolated Environment</span>

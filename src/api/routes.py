@@ -99,7 +99,9 @@ async def chat_stream_endpoint(request: ChatRequest):
                 if update:
                     full_state.update(update)
                     
-                if node_name == "load_memory":
+                if node_name == "embed_query":
+                    yield f"data: {json.dumps({'status': 'Generating query embeddings...'})}\n\n"
+                elif node_name == "load_memory":
                     yield f"data: {json.dumps({'status': 'Loading user memory...'})}\n\n"
                 elif node_name == "contextualize_query":
                     yield f"data: {json.dumps({'status': 'Contextualizing query...'})}\n\n"
@@ -132,6 +134,7 @@ async def chat_stream_endpoint(request: ChatRequest):
                 db = supabase_manager.get_tenant_client(u_tenant)
                 db.table("semantic_cache").insert({
                     "tenant_id": u_tenant,
+                    "user_id": state.get("user_id", "default_user"),
                     "query": req_msg,
                     "query_embedding": query_embedding,
                     "response": ans
@@ -247,6 +250,9 @@ def delete_document(tenant_id: str, document_id: str):
         # Delete document record
         db.table("documents").delete().eq("id", document_id).eq("tenant_id", uuid_tenant).execute()
         
+        # CLEAR SEMANTIC CACHE: To prevent cached answers containing info from the deleted document
+        db.table("semantic_cache").delete().eq("tenant_id", uuid_tenant).execute()
+        
         # Safely delete from Neo4j Knowledge Graph
         from src.database.neo4j_client import neo4j_manager
         with neo4j_manager.driver.session() as session:
@@ -261,6 +267,33 @@ def delete_document(tenant_id: str, document_id: str):
                 DETACH DELETE e
             """, doc_id=document_id, tenant_id=uuid_tenant)
             
-        return {"message": "Document, Vectors, and Knowledge Graph nodes successfully deleted"}
+        return {"message": "Document, Vectors, Cache, and Knowledge Graph nodes successfully deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete document: {e}")
+
+@router.delete("/api/v1/memory/{tenant_id}/{user_id}")
+def delete_memory(tenant_id: str, user_id: str):
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    db = supabase_manager.get_tenant_client(uuid_tenant)
+    try:
+        # 1. Delete episodic memory
+        db.table("episodic_memory").delete().eq("user_id", user_id).eq("tenant_id", uuid_tenant).execute()
+        # 2. Delete user facts
+        db.table("user_facts").delete().eq("user_id", user_id).eq("tenant_id", uuid_tenant).execute()
+        # 3. Delete explicit user preferences
+        db.table("preference_memory").delete().eq("user_id", user_id).eq("tenant_id", uuid_tenant).execute()
+        
+        # CLEAR SEMANTIC CACHE: Since semantic cache is now user-level, purge it for this specific user
+        db.table("semantic_cache").delete().eq("user_id", user_id).eq("tenant_id", uuid_tenant).execute()
+        
+        # 4. Delete Neo4j User node and relationships
+        from src.database.neo4j_client import neo4j_manager
+        with neo4j_manager.driver.session() as session:
+            session.run("""
+                MATCH (u:User {id: $user_id, tenantId: $tenant_id})
+                DETACH DELETE u
+            """, user_id=user_id, tenant_id=uuid_tenant)
+            
+        return {"message": "Memory successfully cleared."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear memory: {e}")

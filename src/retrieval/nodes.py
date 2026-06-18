@@ -45,20 +45,39 @@ from src.retrieval.hybrid import get_embedding
 class RewrittenQuery(BaseModel):
     new_query: str = Field(description="The reformulated question")
 
+class FactList(BaseModel):
+    facts: list[str] = Field(description="A list of standalone factual statements extracted from the latest interaction")
+
+
+@traceable(name="embed_query")
+def embed_query(state):
+    print("--- EMBEDDING QUERY ---")
+    question = state["question"]
+    try:
+        query_embedding = get_embedding(question)
+        return {"query_embedding": query_embedding}
+    except Exception as e:
+        print(f"Failed to generate query embedding: {e}")
+        return {"query_embedding": []}
 
 @traceable(name="check_semantic_cache")
 def check_cache(state):
     print("--- CHECKING SEMANTIC CACHE ---")
     question = state["question"]
     tenant_id = state["tenant_id"]
+    user_id = state.get("user_id", "default_user")
     
     try:
-        query_embedding = get_embedding(question)
+        query_embedding = state.get("query_embedding")
+        if not query_embedding:
+            return {"route": "not_cached"}
+            
         db = supabase_manager.get_tenant_client(tenant_id)
         
         response = db.rpc("match_semantic_cache", {
             "p_query_embedding": query_embedding,
             "p_tenant_id": tenant_id,
+            "p_user_id": user_id,
             "match_threshold": 0.95
         }).execute()
         
@@ -101,7 +120,10 @@ def retrieve(state):
     question = state["question"]
     tenant_id = state["tenant_id"]
     
-    docs = hybrid_retriever(tenant_id, question, top_k=10)
+    user_id = state.get("user_id", "default_user")
+    query_embedding = state.get("query_embedding", [])
+    
+    docs = hybrid_retriever(tenant_id, user_id, question, query_embedding, top_k=10)
     return {"documents": docs}
 
 @traceable(name="grade_documents")
@@ -156,16 +178,17 @@ def grade_documents(state):
 
 @traceable(name="generate_answer")
 def generate(state, config):
-    print("--- GENERATING FINAL ANSWER VIA GITHUB MODELS (GPT-4o-MINI) ---")
+    print("--- GENERATING FINAL ANSWER VIA SARVAM-30B ---")
     question = state["question"]
     documents = state["documents"]
     preferences = state.get("preferences", {})
-    summary = state.get("summary", "")
+    rolling_context = state.get("rolling_context", "")
+    user_facts = state.get("user_facts", "")
     chat_history = state.get("chat_history", [])
     
     system_prompt = (
         "You are an expert SaaS support assistant. "
-        "Answer the user's question using the provided Context, Previous Conversation Summary, and Recent Chat History. "
+        "Answer the user's question using the provided Context, Relevant User Facts, Rolling Context, and Recent Chat History. "
         "If the user asks about the conversation itself, answer using the Recent Chat History. "
         "You must ONLY answer in English. If the answer cannot be found in ANY of the provided information, say exactly 'I don't know.'"
     )
@@ -174,13 +197,15 @@ def generate(state, config):
         system_prompt += f"\n\nCRITICAL USER PREFERENCES YOU MUST FOLLOW:\n{preferences}"
         
     context_block = f"Context:\n{documents}"
-    if summary:
-        context_block += f"\n\nPrevious Conversation Summary:\n{summary}"
+    if user_facts:
+        context_block += f"\n\nRelevant User Facts:\n{user_facts}"
+    if rolling_context:
+        context_block += f"\n\nRolling Conversation Context:\n{rolling_context}"
         
     # Inject Short-Term Memory Buffer
     if chat_history:
-        # Keep up to the last 6 messages
-        recent_history = chat_history[-6:]
+        # Keep up to the last 4 messages (2 turns) since older ones are rolled up
+        recent_history = chat_history[-4:]
         history_str = ""
         for msg in recent_history:
             role = "User" if msg["role"] == "user" else "Assistant"
@@ -208,9 +233,10 @@ def generate(state, config):
 
 @traceable(name="load_memory")
 def load_memory(state):
-    print("--- LOADING LTM (PREFERENCES & EPISODIC) ---")
+    print("--- LOADING LTM (FACTS, PREFS & ROLLING CONTEXT) ---")
     tenant_id = state["tenant_id"]
     user_id = state.get("user_id", "default_user")
+    question = state.get("question", "")
     
     db = supabase_manager.get_tenant_client(tenant_id)
     
@@ -223,67 +249,134 @@ def load_memory(state):
     except Exception as e:
         print(f"Failed to load preferences: {e}")
         
-    # 2. Load latest episodic summary
-    summary = ""
+    # 2. Load latest rolling context
+    rolling = ""
     try:
-        # Get the most recent summary
         sum_res = db.table("episodic_memory").select("summary").eq("tenant_id", tenant_id).eq("user_id", user_id).order("completed_at", desc=True).limit(1).execute()
         if sum_res.data:
-            summary = sum_res.data[0]["summary"]
+            rolling = sum_res.data[0]["summary"]
     except Exception as e:
-        print(f"Failed to load summary: {e}")
+        print(f"Failed to load rolling context: {e}")
         
-    print(f"Loaded {len(preferences)} preferences and summary length {len(summary)}")
-    return {"preferences": preferences, "summary": summary}
+    # 3. Load User Facts via RPC
+    user_facts = ""
+    try:
+        if question:
+            query_embedding = state.get("query_embedding")
+            if not query_embedding:
+                query_embedding = get_embedding(question)
+            fact_res = db.rpc("match_user_facts", {
+                "p_query_embedding": query_embedding,
+                "p_tenant_id": tenant_id,
+                "p_user_id": user_id,
+                "match_threshold": 0.5,
+                "match_count": 3
+            }).execute()
+            if fact_res.data:
+                user_facts = "\n".join([f"- {row['fact']}" for row in fact_res.data])
+    except Exception as e:
+        print(f"Failed to load user facts: {e}")
+        
+    print(f"Loaded {len(preferences)} preferences, {len(user_facts)} facts, and rolling context length {len(rolling)}")
+    return {"preferences": preferences, "rolling_context": rolling, "user_facts": user_facts}
 
 @traceable(name="save_memory")
 def save_memory(state):
-    print("--- SAVING LTM (EPISODIC DISTILLATION) ---")
+    print("--- SAVING LTM (FACT EXTRACTION & ROLLING SUMMARY) ---")
     tenant_id = state["tenant_id"]
     user_id = state.get("user_id", "default_user")
     chat_history = state.get("chat_history", [])
-    current_summary = state.get("summary", "")
+    current_rolling = state.get("rolling_context", "")
+    current_q = state.get("question", "")
+    current_a = state.get("generation", "")
     
+    if not current_q or not current_a:
+        return {}
+        
+    db = supabase_manager.get_tenant_client(tenant_id)
+    
+    # 1. Fact Extraction
+    interaction = f"User: {current_q}\nAssistant: {current_a}"
     try:
+        decision = sarvam_instructor.chat.completions.create(
+            model="sarvam-30b",
+            response_model=FactList,
+            mode=instructor.Mode.JSON,
+            messages=[
+                {"role": "system", "content": "Extract highly specific, discrete facts about the user's preferences, setup, and the entities they are discussing from this interaction. Only output new facts."},
+                {"role": "user", "content": interaction}
+            ]
+        )
+        for fact in decision.facts:
+            # embed fact
+            fact_emb = get_embedding(fact)
+            db.table("user_facts").insert({
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "fact": fact,
+                "embedding": fact_emb
+            }).execute()
+            print(f"Extracted Fact: {fact}")
+    except Exception as e:
+        print(f"Fact extraction failed: {e}")
+
+    # 2. Graph Update
+    try:
+        from src.database.neo4j_client import neo4j_manager
+        session = neo4j_manager.get_session()
+        def _update_graph(tx, t_id, u_id, text):
+            words = [word.lower() for word in text.replace("?", "").split() if len(word) > 2]
+            if not words: return
+            q_str = """
+            MATCH (e:Entity)
+            WHERE e.tenantId = $t_id AND ANY(word IN $words WHERE toLower(e.name) CONTAINS word)
+            MERGE (u:User {id: $u_id, tenantId: $t_id})
+            MERGE (u)-[:ASKED_ABOUT]->(e)
+            """
+            tx.run(q_str, t_id=t_id, u_id=u_id, words=words)
+        session.execute_write(_update_graph, tenant_id, user_id, current_q)
+        session.close()
+        print("Graph user memory updated.")
+    except Exception as e:
+        print(f"Graph update failed: {e}")
+        
+    # 3. Rolling Chat Summarization
+    total_messages = len(chat_history) + 2 
+    new_summary = current_rolling
+    
+    if total_messages > 8: # More than 4 complete turns
+        old_messages = chat_history[:-4]
         history_str = ""
-        for msg in chat_history:
+        for msg in old_messages:
             role = "User" if msg["role"] == "user" else "Assistant"
             history_str += f"{role}: {msg['content']}\n"
             
-        # Append the current interaction!
-        current_q = state.get("question", "")
-        current_a = state.get("generation", "")
-        if current_q and current_a:
-            history_str += f"User: {current_q}\nAssistant: {current_a}\n"
+        system_prompt = "You are a memory distillation AI. Given an existing background context and some old chat messages, generate an updated, concise running context. Focus on key decisions."
+        prompt = f"Existing Context: {current_rolling}\n\nOld Messages:\n{history_str}"
+        try:
+            response = github_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            new_summary = response.choices[0].message.content
+        except Exception as e:
+            print(f"Rolling summary failed: {e}")
             
-        if not history_str.strip():
-            return {}
-            
-        system_prompt = "You are a memory distillation AI. Given an existing summary and a new chat transcript, generate an updated, concise summary of the entire interaction. Focus on key facts, decisions, and context. Do NOT answer the user."
-        prompt = f"Existing Summary: {current_summary}\n\nNew Transcript:\n{history_str}"
-        
-        response = github_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        new_summary = response.choices[0].message.content
-        
-        # Save to DB
-        db = supabase_manager.get_tenant_client(tenant_id)
+    # Save the rolling context to episodic_memory (reusing the table)
+    try:
         db.table("episodic_memory").insert({
             "tenant_id": tenant_id,
             "user_id": user_id,
             "summary": new_summary
         }).execute()
-        
-        print(f"Distilled new summary: {new_summary[:50]}...")
-        return {"summary": new_summary}
+        print(f"Updated rolling context.")
     except Exception as e:
-        print(f"Failed to save episodic memory: {e}")
-        return {}
+        print(f"Failed to save rolling context: {e}")
+
+    return {"rolling_context": new_summary}
 
 @traceable(name="rewrite_query")
 def rewrite(state):

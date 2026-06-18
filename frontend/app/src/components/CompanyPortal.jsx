@@ -89,14 +89,10 @@ export default function CompanyPortal() {
       </header>
 
       <SignedOut>
-        <div className="auth-container">
-          <div className="auth-box">
-            <h3>Sign In</h3>
+        <div className="auth-container" style={{ display: 'flex', justifyContent: 'center' }}>
+          <div className="auth-box" style={{ maxWidth: '500px' }}>
+            <h3>Company Admin Login</h3>
             <SignIn fallbackRedirectUrl="/company" routing="hash" />
-          </div>
-          <div className="auth-box">
-            <h3>Register Company</h3>
-            <SignUp fallbackRedirectUrl="/company" routing="hash" />
           </div>
         </div>
       </SignedOut>
