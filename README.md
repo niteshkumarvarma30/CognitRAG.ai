@@ -49,7 +49,7 @@ graph TD
     %% Retrieval
     subgraph Retrieval Phase
         HybridSearch --> VS[("Supabase Vector<br/>(HNSW)")]
-        HybridSearch --> KS[("Supabase Keyword<br/>(BM25)") ]
+        HybridSearch --> KS[("Supabase Keyword<br/>(BM25)")]
         HybridSearch --> GS[("Neo4j Graph<br/>(Cypher)")]
         VS & KS & GS --> RRF["Reciprocal Rank Fusion<br/>(Top 5)"]
     end
