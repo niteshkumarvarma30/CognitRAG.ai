@@ -23,8 +23,12 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    parent_id TEXT,
     content TEXT NOT NULL,
     embedding VECTOR(1536), 
+    entities JSONB DEFAULT '[]'::jsonb,
+    graph_score FLOAT DEFAULT 0.0,
+    relationship_types JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -44,3 +48,38 @@ CREATE POLICY "Tenant Isolation" ON document_chunks
     AS PERMISSIVE FOR ALL
     USING (tenant_id::text = (current_setting('request.jwt.claims', true)::json->>'tenant_id'))
     WITH CHECK (tenant_id::text = (current_setting('request.jwt.claims', true)::json->>'tenant_id'));
+
+-- --------------------------------------------------------
+-- Vector Search RPC
+-- --------------------------------------------------------
+CREATE OR REPLACE FUNCTION match_document_chunks (
+  query_embedding vector(1536),
+  match_count int,
+  p_tenant_id uuid
+) RETURNS TABLE (
+  id uuid,
+  content text,
+  parent_id text,
+  entities jsonb,
+  graph_score float,
+  relationship_types jsonb,
+  similarity float
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    dc.id,
+    dc.content,
+    dc.parent_id,
+    dc.entities,
+    dc.graph_score,
+    dc.relationship_types,
+    1 - (dc.embedding <=> query_embedding) AS similarity
+  FROM document_chunks dc
+  WHERE dc.tenant_id = p_tenant_id
+  ORDER BY dc.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;

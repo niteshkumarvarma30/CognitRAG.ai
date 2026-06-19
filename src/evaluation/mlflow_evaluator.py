@@ -1,6 +1,8 @@
 import os
 import instructor
 import mlflow
+import csv
+import time
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from src.retrieval.graph import crag_app
@@ -12,8 +14,9 @@ judge_client = instructor.from_openai(OpenAI(
 ))
 
 class EvaluationScore(BaseModel):
-    context_precision_score: int = Field(ge=0, le=1)
     faithfulness_score: int = Field(ge=0, le=1)
+    relevance_score: int = Field(ge=0, le=1)
+    context_accuracy_score: int = Field(ge=0, le=1)
 
 def evaluate_rag_response(question: str, retrieved_context: str, generated_answer: str) -> EvaluationScore:
     prompt = f"""
@@ -21,10 +24,11 @@ def evaluate_rag_response(question: str, retrieved_context: str, generated_answe
     [CONTEXT]: {retrieved_context}
     [ANSWER]: {generated_answer}
     
-    1. Context Precision (0 or 1): Does the CONTEXT contain enough info to answer the QUESTION?
-    2. Faithfulness (0 or 1): Is the ANSWER completely supported by the CONTEXT without hallucinating?
+    1. Faithfulness (0 or 1): Is the ANSWER completely supported by the CONTEXT without hallucinating?
+    2. Relevance (0 or 1): Is the ANSWER highly relevant and directly answering the QUESTION?
+    3. Context Accuracy (0 or 1): Does the CONTEXT accurately match the domain and intent of the QUESTION?
     """
-    return judge_client.chat.completions.create(
+    result = judge_client.chat.completions.create(
         model="sarvam-105b",
         response_model=EvaluationScore,
         messages=[
@@ -32,22 +36,26 @@ def evaluate_rag_response(question: str, retrieved_context: str, generated_answe
             {"role": "user", "content": prompt}
         ]
     )
+    return result
 
-# 2. Define the Test Suite
-test_suite = [
-    {"inputs": "Tell me about Developer Options, specifically debug_assertions.", "tenant_id": "619f50ab-df74-4057-9305-05a70fdc2474"},
-    {"inputs": "What happens if wal_consistency_checking is enabled?", "tenant_id": "619f50ab-df74-4057-9305-05a70fdc2474"},
-    {"inputs": "What is the CPU stepping and microcode version for the Intel Celeron 7305 processor?", "tenant_id": "3780bb27-250a-4a2c-be4b-9252b8e8ce9a"},
-    {"inputs": "What is the maximum instance storage and network bandwidth for the im4gn.4xlarge EC2 instance?", "tenant_id": "a7f179d0-83b7-4960-843f-3cac536797f3"}
-]
+# 2. Load the Test Suite from CSV
+test_suite = []
+with open("langsmith_eval_dataset.csv", "r", encoding="utf-8") as f:
+    reader = csv.DictReader(f)
+    for row in reader:
+        test_suite.append({
+            "inputs": row["question"],
+            "tenant_id": "f721d779-671a-5f4e-876c-97ad3d818b64"  # Force the correct tenant ID for the PostgreSQL manual
+        })
 
 # 3. Target the exact MLflow UI
 mlflow.set_tracking_uri("sqlite:///mlflow.db")
-mlflow.set_experiment("rag-saas-workflow")
+mlflow.set_experiment("rag-saas-workflow-v2")
 
 print("Starting Custom Bulletproof MLflow Evaluation...")
-total_precision = 0
 total_faithfulness = 0
+total_relevance = 0
+total_context_accuracy = 0
 
 with mlflow.start_run(run_name="Llama-3-Custom-Metrics-Run"):
     for test in test_suite:
@@ -65,15 +73,18 @@ with mlflow.start_run(run_name="Llama-3-Custom-Metrics-Run"):
         
         # Grade using our Instructor Judge
         score = evaluate_rag_response(test["inputs"], context, answer)
-        total_precision += score.context_precision_score
         total_faithfulness += score.faithfulness_score
+        total_relevance += score.relevance_score
+        total_context_accuracy += score.context_accuracy_score
 
     # 4. Push the Final Grades directly into the MLflow UI 'Overview' Dashboard
-    avg_precision = total_precision / len(test_suite)
     avg_faithfulness = total_faithfulness / len(test_suite)
+    avg_relevance = total_relevance / len(test_suite)
+    avg_context_accuracy = total_context_accuracy / len(test_suite)
     
-    mlflow.log_metric("Context_Precision_Accuracy", avg_precision)
-    mlflow.log_metric("Answer_Faithfulness_Accuracy", avg_faithfulness)
+    mlflow.log_metric("Faithfulness", avg_faithfulness)
+    mlflow.log_metric("Relevance", avg_relevance)
+    mlflow.log_metric("Context_Accuracy", avg_context_accuracy)
 
 print("\n--- EVALUATION COMPLETE ---")
 print("Check the 'Overview' tab of the new run to see your Metrics beautifully populated!")

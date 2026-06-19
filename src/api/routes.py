@@ -3,8 +3,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from src.database.supabase_client import supabase_manager
 from src.ingestion.parser import parse_pdf, chunk_text
-from src.ingestion.vector_worker import process_vector_track_sync
-from src.ingestion.graph_worker import process_graph_track_sync
+from src.ingestion.pipeline import run_ingestion_pipeline
 from src.retrieval.graph import crag_app
 
 from fastapi.responses import StreamingResponse
@@ -108,11 +107,14 @@ async def chat_stream_endpoint(request: ChatRequest):
                 elif node_name == "check_cache":
                     yield f"data: {json.dumps({'status': 'Checking semantic cache...'})}\n\n"
                 elif node_name == "route_query":
-                    yield f"data: {json.dumps({'status': 'Routing query...'})}\n\n"
+                    need_mem = full_state.get("need_memory", False)
+                    need_graph = full_state.get("need_graph", False)
+                    ents = full_state.get("query_entities", [])
+                    yield f"data: {json.dumps({'status': f'Routing query... (Mem: {need_mem}, Graph: {need_graph}, Entities: {len(ents)})'})}\n\n"
                 elif node_name == "retrieve":
                     yield f"data: {json.dumps({'status': 'Retrieving from Vector & Graph...'})}\n\n"
                 elif node_name == "grade_documents":
-                    yield f"data: {json.dumps({'status': 'Reranking and validating chunks...'})}\n\n"
+                    yield f"data: {json.dumps({'status': 'Reranking and validating chunks (Jina)...'})}\n\n"
                 elif node_name == "generate" or node_name == "generate_cached":
                     yield f"data: {json.dumps({'status': 'Synthesizing final answer...'})}\n\n"
                 elif node_name == "rewrite":
@@ -152,7 +154,9 @@ async def chat_stream_endpoint(request: ChatRequest):
         else:
             context_string = "\n\n".join([doc.page_content for doc in context_docs if hasattr(doc, "page_content")])
             
-        yield f"data: {json.dumps({'status': 'done', 'answer': final_answer, 'context': context_string})}\n\n"
+        graph_context_str = full_state.get("graph_context", "")
+            
+        yield f"data: {json.dumps({'status': 'done', 'answer': final_answer, 'context': context_string, 'graph_context': graph_context_str})}\n\n"
         
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -162,8 +166,7 @@ def background_ingestion_pipeline(uuid_tenant: str, document_id: str, pdf_bytes:
     try:
         text = parse_pdf(pdf_bytes)
         chunks = chunk_text(text)
-        process_vector_track_sync(uuid_tenant, document_id, chunks)
-        process_graph_track_sync(uuid_tenant, document_id, chunks)
+        run_ingestion_pipeline(uuid_tenant, document_id, chunks)
         db.table("documents").update({"status": "completed"}).eq("id", document_id).execute()
         print(f"Successfully processed document {document_id}")
     except Exception as e:

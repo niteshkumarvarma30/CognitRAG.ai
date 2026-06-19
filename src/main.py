@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from src.api.routes import router
+from src.api.routes import router as main_router
+from src.api.memory_routes import router as memory_router
 import os
 
 import mlflow
@@ -28,7 +29,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router)
+app.include_router(main_router)
+app.include_router(memory_router)
 
 @app.get("/health")
 def health_check():

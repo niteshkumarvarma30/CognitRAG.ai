@@ -51,7 +51,7 @@ def keyword_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
         fts_query = " | ".join(words)
         
         response = db.table("document_chunks") \
-            .select("id, content") \
+            .select("id, content, parent_id, entities, graph_score, relationship_types") \
             .eq("tenant_id", tenant_id) \
             .text_search("content", fts_query) \
             .execute()
@@ -66,31 +66,49 @@ def keyword_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
         print(f"Keyword search failed: {e}")
         return []
 
-def graph_search(tenant_id: str, user_id: str, query: str, top_k: int = 20) -> list[dict]:
-    """Neo4j search matching query words to entities and pulling relationships."""
+def graph_search(tenant_id: str, user_id: str, query: str, query_entities: list[str] = None, top_k: int = 20) -> list[dict]:
+    """Neo4j search matching query words or entities and pulling relationships."""
+    if query_entities is None:
+        query_entities = []
+        
     results = []
     try:
         session = neo4j_manager.get_session()
         words = [word.lower() for word in query.replace("?", "").split() if len(word) > 2]
-        def _read_tx(tx, t_id, u_id, wds, tk):
-            q_str1 = """
-            MATCH (e1:Entity)-[r:RELATION]->(e2:Entity)
-            WHERE e1.tenantId = $tenant_id
-            AND ANY(word IN $words WHERE toLower(e1.name) CONTAINS word OR toLower(e2.name) CONTAINS word)
-            RETURN e1.name + ' has the following relationship: ' + r.type + ' with ' + e2.name AS content
-            LIMIT $top_k
-            """
+        def _read_tx(tx, t_id, u_id, wds, ents, tk):
+            if ents:
+                q_str1 = """
+                MATCH (e1:Entity)-[r:RELATION]->(e2:Entity)
+                WHERE e1.tenantId = $tenant_id
+                AND (e1.name IN $entities OR e2.name IN $entities)
+                RETURN e1.name + ' has the following relationship: ' + r.type + ' with ' + e2.name AS content
+                LIMIT $top_k
+                """
+            else:
+                q_str1 = """
+                MATCH (e1:Entity)-[r:RELATION]->(e2:Entity)
+                WHERE e1.tenantId = $tenant_id
+                AND ANY(word IN $words WHERE toLower(e1.name) CONTAINS word OR toLower(e2.name) CONTAINS word)
+                RETURN e1.name + ' has the following relationship: ' + r.type + ' with ' + e2.name AS content
+                LIMIT $top_k
+                """
+                
             q_str2 = """
             MATCH (u:User {id: $u_id, tenantId: $tenant_id})-[r]->(e:Entity)
             WHERE ANY(word IN $words WHERE toLower(e.name) CONTAINS word)
             RETURN 'User has previously interacted with the topic: ' + e.name AS content
             LIMIT $top_k
             """
-            res1 = [record["content"] for record in tx.run(q_str1, tenant_id=t_id, words=wds, top_k=tk)]
+            
+            if ents:
+                res1 = [record["content"] for record in tx.run(q_str1, tenant_id=t_id, entities=ents, top_k=tk)]
+            else:
+                res1 = [record["content"] for record in tx.run(q_str1, tenant_id=t_id, words=wds, top_k=tk)]
+                
             res2 = [record["content"] for record in tx.run(q_str2, tenant_id=t_id, u_id=u_id, words=wds, top_k=tk)]
             return res1 + res2
             
-        res = session.execute_read(_read_tx, tenant_id, user_id, words, top_k)
+        res = session.execute_read(_read_tx, tenant_id, user_id, words, query_entities, top_k)
         for content in res:
             results.append({"content": content})
         session.close()
@@ -104,6 +122,7 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
     score = 1 / (k + rank)
     """
     scores = {}
+    metadata_map = {}
     
     def add_to_scores(results, base_weight=1.0):
         for rank, res in enumerate(results):
@@ -111,13 +130,26 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
             if not content:
                 continue
                 
+            # Use parent_id as the primary deduplication key to prevent duplicate context windows
+            grouping_key = res.get("parent_id")
+            if not grouping_key:
+                grouping_key = content
+                
             # Apply dynamic title boost factor if it exists
             boost = res.get("boost_factor", 1.0)
             final_weight = base_weight * boost
             
-            if content not in scores:
-                scores[content] = 0.0
-            scores[content] += final_weight * (1.0 / (k + rank + 1))
+            if grouping_key not in scores:
+                scores[grouping_key] = 0.0
+                # Save metadata on first encounter
+                metadata_map[grouping_key] = {
+                    "content": content,
+                    "parent_id": res.get("parent_id", ""),
+                    "entities": res.get("entities", []),
+                    "graph_score": res.get("graph_score", 0.0),
+                    "relationship_types": res.get("relationship_types", [])
+                }
+            scores[grouping_key] += final_weight * (1.0 / (k + rank + 1))
             
     add_to_scores(vector_res, base_weight=2.0)  # Boost vector semantics
     add_to_scores(keyword_res, base_weight=1.5) # Re-boost keyword for exact matches like im4gn.4xlarge
@@ -125,27 +157,46 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
     
     # Sort descending by RRF score
     sorted_contents = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-    return sorted_contents
+    
+    # Calculate high confidence for dynamic reranking bypass
+    high_confidence = False
+    if sorted_contents:
+        top_score = scores[sorted_contents[0]]
+        # 0.05 score requires the chunk to be highly ranked across multiple parallel searches
+        if top_score >= 0.05:
+            high_confidence = True
+            
+    # Reconstruct the dictionaries
+    final_results = []
+    for grouping_key in sorted_contents:
+        meta = metadata_map[grouping_key]
+        final_results.append({
+            "content": meta["content"],
+            "parent_id": meta["parent_id"],
+            "entities": meta["entities"],
+            "graph_score": meta["graph_score"],
+            "relationship_types": meta["relationship_types"]
+        })
+            
+    return final_results, high_confidence
 
 import concurrent.futures
 
-def hybrid_retriever(tenant_id: str, user_id: str, query: str, query_embedding: list[float], top_k: int = 5) -> str:
-    """Executes all 3 searches in parallel and fuses them with RRF."""
-    print("  -> Running Hybrid Search (Vector + Keyword + Graph) in Parallel...")
+def hybrid_retriever(tenant_id: str, user_id: str, query: str, query_embedding: list[float], top_k: int = 5):
+    """Executes Vector and Keyword searches in parallel, and fuses them with RRF."""
+    print("  -> Running Hybrid Search (Vector + Keyword).")
     
-    v_res, k_res, g_res = [], [], []
+    v_res, k_res = [], []
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         future_v = executor.submit(vector_search, tenant_id, query, query_embedding)
         future_k = executor.submit(keyword_search, tenant_id, query)
-        future_g = executor.submit(graph_search, tenant_id, user_id, query)
         
         v_res = future_v.result()
         k_res = future_k.result()
-        g_res = future_g.result()
     
     print("  -> Applying Reciprocal Rank Fusion (RRF)...")
-    fused_docs = compute_rrf(v_res, k_res, g_res)
+    fused_docs, high_conf = compute_rrf(v_res, k_res, [])
     
     # DYNAMIC TOKEN BUDGETING
     # Sarvam-30B context window is 8192 tokens. Let's aim for max 6000 tokens for context to leave room for system prompt, history, and generation.
@@ -155,7 +206,7 @@ def hybrid_retriever(tenant_id: str, user_id: str, query: str, query_embedding: 
     
     top_contexts = []
     for doc in fused_docs:
-        doc_chars = len(doc)
+        doc_chars = len(doc["content"])
         if current_chars + doc_chars > max_chars:
             print("  -> Token Budget Reached. Stopping retrieval to prevent context overflow.")
             break
@@ -166,8 +217,4 @@ def hybrid_retriever(tenant_id: str, user_id: str, query: str, query_embedding: 
             break
             
     print(f"  -> Dynamic Budgeting allocated {len(top_contexts)} chunks using approx {current_chars//4} tokens.")
-    
-    if not top_contexts:
-        return "No relevant context found."
-        
-    return "\n\n---\n\n".join(top_contexts)
+    return top_contexts, high_conf

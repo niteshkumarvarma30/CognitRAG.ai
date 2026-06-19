@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Database, Bot, User, Brain, RefreshCw } from 'lucide-react';
 import { UserButton, useUser } from '@clerk/clerk-react';
+import MemoryManager from './MemoryManager';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -10,6 +11,8 @@ export default function Chat({ tenantId }) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [workflowStatus, setWorkflowStatus] = useState('');
+  const [graphContext, setGraphContext] = useState('');
+  const [showMemoryManager, setShowMemoryManager] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -83,6 +86,7 @@ export default function Chat({ tenantId }) {
                       }
                       return newMsgs;
                   });
+                  setGraphContext(data.graph_context || '');
                   setWorkflowStatus('');
                 } else if (data.token !== undefined) {
                   setMessages(prev => {
@@ -116,7 +120,8 @@ export default function Chat({ tenantId }) {
   };
 
   return (
-    <div className="chat-container glass-panel" style={{ width: '100%', maxWidth: '1200px', margin: '0 auto', height: '90vh' }}>
+    <div style={{ display: 'flex', gap: '1rem', width: '100%', maxWidth: '1600px', margin: '0 auto', height: '90vh' }}>
+      <div className="chat-container glass-panel" style={{ flex: '1', display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header className="chat-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <Brain className="logo-icon" size={32} />
@@ -146,6 +151,26 @@ export default function Chat({ tenantId }) {
           >
             <RefreshCw size={16} />
             <span>Reset Memory</span>
+          </button>
+          <button 
+            onClick={() => setShowMemoryManager(true)}
+            className="reset-memory-btn"
+            style={{ 
+                background: 'rgba(139, 92, 246, 0.1)', 
+                color: '#8b5cf6', 
+                border: '1px solid rgba(139, 92, 246, 0.2)', 
+                padding: '0.4rem 0.8rem', 
+                borderRadius: '6px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem',
+                cursor: 'pointer',
+                fontSize: '0.875rem'
+            }}
+            title="Manage Long-Term Memory"
+          >
+            <Database size={16} />
+            <span>Manage Memory</span>
           </button>
           <div className="memory-badge">
             <Database size={16} />
@@ -203,6 +228,30 @@ export default function Chat({ tenantId }) {
           </button>
         </div>
       </form>
+      </div>
+
+      <div className="glass-panel" style={{ width: '380px', display: 'flex', flexDirection: 'column', height: '100%', padding: '1.25rem' }}>
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.75rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Database size={18} />
+          Graph Retrieval
+        </h3>
+        <div style={{ flex: 1, overflowY: 'auto', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+          {graphContext ? (
+            graphContext.split('\n').filter(line => line.trim()).map((line, idx) => (
+              <div key={idx} style={{ marginBottom: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', borderLeft: '3px solid #8b5cf6', lineHeight: '1.4' }}>
+                {line}
+              </div>
+            ))
+          ) : (
+            <div style={{ textAlign: 'center', marginTop: '4rem', opacity: 0.5 }}>
+              <Database size={40} style={{ margin: '0 auto 1rem' }} />
+              <p>Ask a question to see the Neo4j knowledge graph traversal.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showMemoryManager && <MemoryManager tenantId={tenantId} onClose={() => setShowMemoryManager(false)} />}
     </div>
   );
 }

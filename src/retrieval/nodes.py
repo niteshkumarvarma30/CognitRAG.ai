@@ -17,7 +17,8 @@ client = instructor.from_openai(OpenAI(
 
 gen_client = OpenAI(
     api_key=os.environ.get("SARVAM_API_KEY", ""),
-    base_url="https://api.sarvam.ai/v1"
+    base_url="https://api.sarvam.ai/v1",
+    timeout=5.0
 )
 
 github_client = OpenAI(
@@ -35,7 +36,10 @@ sarvam_instructor = instructor.from_openai(gen_client)
 instructor_client = instructor.from_openai(github_client)
 
 class RouteDecision(BaseModel):
-    intent: str = Field(description="Must be exactly 'greeting', 'faq', 'conversational', or 'technical_query'")
+    intent: str = Field(description="Must be exactly 'greeting', 'faq', 'conversational', 'followup', 'personal', or 'technical_query'")
+    need_memory: bool = Field(description="True if the query requires conversational context or user preferences (e.g. 'followup', 'personal', 'conversational')")
+    need_graph: bool = Field(description="CRITICAL: Set to True if the query contains words like 'relate', 'connect', 'depend', 'compare', 'difference', or asks how concepts interact. Default to False otherwise.")
+    query_entities: list[str] = Field(description="A list of specific technical entities or concepts mentioned in the query.")
 
 class GraderDecision(BaseModel):
     is_relevant: str = Field(description="Must be exactly 'yes' or 'no'")
@@ -89,9 +93,10 @@ def check_cache(state):
         
         response = db.rpc("match_semantic_cache", {
             "p_query_embedding": query_embedding,
+            "match_count": 1,
+            "match_threshold": 0.85,
             "p_tenant_id": tenant_id,
-            "p_user_id": user_id,
-            "match_threshold": 0.95
+            "p_user_id": user_id
         }).execute()
         
         if response.data and len(response.data) > 0:
@@ -111,58 +116,96 @@ def route_query(state):
     print("--- ROUTING QUERY VIA SARVAM-105B ---")
     question = state["question"]
     try:
-        decision = instructor_client.chat.completions.create(
-            model="gpt-4o-mini",
+        res = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
             response_model=RouteDecision,
             messages=[
-                {"role": "system", "content": "Classify the intent of the user query. ONLY return 'greeting' or 'faq' for pure small talk (like 'hello', 'who are you'). Return 'conversational' if the user asks about the conversation history itself (like 'what did we talk about', 'summarize our chat'). ALL other queries asking about technical systems, features, or documents MUST be classified as 'technical_query'."},
+                {"role": "system", "content": "Classify the intent of the user query. ONLY return 'greeting' or 'faq' for pure small talk (like 'hello', 'who are you'). Return 'conversational' if the user asks about the conversation history itself. Return 'personal' for questions about user preferences. Return 'followup' for queries needing previous chat context. CRITICAL: Any query asking 'What are', 'How to', 'What is the default', or anything about configurations, options, variables, parameters, or technical terms MUST ALWAYS be classified as 'technical_query'. When in doubt, default to 'technical_query'. Also extract technical entities and determine if memory or graph search is needed."},
                 {"role": "user", "content": question}
             ]
         )
-        route = decision.intent
+        route = res.intent
+        need_memory = res.need_memory
+        need_graph = res.need_graph
+        query_entities = res.query_entities
     except Exception as e:
         print(f"Router failed: {e}. Defaulting to technical_query.")
         route = "technical_query"
+        need_memory = False
+        need_graph = False
+        query_entities = []
         
-    print(f"Decision: {route}")
-    return {"route": route}
+    print(f"Decision: {route} | Need Mem: {need_memory} | Need Graph: {need_graph} | Entities: {query_entities}")
+    return {"route": route, "need_memory": need_memory, "need_graph": need_graph, "query_entities": query_entities}
 
 @traceable(name="retrieve_context")
 def retrieve(state):
-    print("--- HYBRID RETRIEVAL (BM25 + Vector + Graph + RRF) ---")
+    print("--- HYBRID RETRIEVAL (BM25 + Vector + RRF) ---")
     question = state["question"]
     tenant_id = state["tenant_id"]
     
     user_id = state.get("user_id", "default_user")
     query_embedding = state.get("query_embedding", [])
     
-    docs = hybrid_retriever(tenant_id, user_id, question, query_embedding, top_k=10)
-    return {"documents": docs}
-
-@traceable(name="grade_documents")
-def grade_documents(state):
-    print("--- GRADING CONTEXT VIA JINA CROSS-ENCODER RERANKER ---")
-    question = state["question"]
-    documents = state["documents"]
+    # 1. Retrieve Candidate Chunks
+    docs, high_conf = hybrid_retriever(tenant_id, user_id, question, query_embedding, top_k=10)
+    # Load Preferences & Facts if they weren't loaded by load_memory (i.e. technical queries)
+    preferences = state.get("preferences", {})
+    user_facts = state.get("user_facts", "")
     
-    if documents == "No relevant context found.":
-        return {"route": "no"}
-        
+    if not preferences and not user_facts:
+        print("  -> Loading Preferences & Facts for Technical Query...")
+        try:
+            mem_key = memory_cache.generate_key(tenant_id, user_id)
+            cached_mem = memory_cache.get(mem_key)
+            db = supabase_manager.get_tenant_client(tenant_id)
+            
+            if cached_mem:
+                preferences = cached_mem.get("preferences", {})
+            else:
+                pref_res = db.table("preference_memory").select("pref_key, pref_value").eq("tenant_id", tenant_id).eq("user_id", user_id).execute()
+                for row in pref_res.data:
+                    preferences[row["pref_key"]] = row["pref_value"]
+                # We do not cache rolling_context here since we didn't fetch it
+                memory_cache.put(mem_key, {"preferences": preferences, "rolling_context": ""}, ttl_seconds=300)
+                
+            if not query_embedding:
+                from src.retrieval.hybrid import get_embedding
+                query_embedding = get_embedding(question)
+                
+            fact_res = db.rpc("match_user_facts", {
+                "p_query_embedding": query_embedding,
+                "p_tenant_id": tenant_id,
+                "p_user_id": user_id,
+                "match_threshold": 0.5,
+                "match_count": 3
+            }).execute()
+            if fact_res.data:
+                user_facts = "\n".join([f"- {row['fact']}" for row in fact_res.data])
+        except Exception as e:
+            print(f"Failed to load facts in retrieve: {e}")
+            
+    return {"documents": docs, "high_confidence": high_conf, "preferences": preferences, "user_facts": user_facts}
+
+def jina_rerank(query: str, documents: list[dict], threshold: float = 0.15) -> list[dict]:
+    """Helper function to call Jina Cross-Encoder and filter by threshold, preserving metadata."""
+    if not documents:
+        return []
     try:
-        # Split documents back into a list of individual chunks
-        chunks = documents.split("\n\n---\n\n")
-        
-        # Call Jina Reranker API
         import requests, os
         headers = {
             "Authorization": f"Bearer {os.environ.get('JINA_API_KEY')}",
             "Content-Type": "application/json"
         }
+        
+        # Extract the content strings for Jina
+        texts = [doc["content"] for doc in documents]
+        
         payload = {
             "model": "jina-reranker-v2-base-multilingual",
-            "query": question,
-            "documents": chunks,
-            "top_n": len(chunks)
+            "query": query,
+            "documents": texts,
+            "top_n": len(texts)
         }
         
         response = requests.post("https://api.jina.ai/v1/rerank", headers=headers, json=payload, timeout=10)
@@ -170,28 +213,155 @@ def grade_documents(state):
         data = response.json()
         
         filtered_chunks = []
-        # Sort results by relevance score descending just in case
         sorted_results = sorted(data.get("results", []), key=lambda x: x.get("relevance_score", 0), reverse=True)
         
-        for result in sorted_results[:5]:  # Keep top 5, but enforce threshold
-            if result.get("relevance_score", 0) >= 0.05:
+        for result in sorted_results:
+            if result.get("relevance_score", 0) >= threshold:
                 index = result.get("index")
-                filtered_chunks.append(chunks[index])
+                filtered_chunks.append(documents[index])
                 
-        if not filtered_chunks:
-            print("Decision: no (all chunks filtered out by Reranker)")
-            return {"route": "no", "documents": "No relevant context found."}
-            
-        print(f"Decision: yes (kept {len(filtered_chunks)}/{len(chunks)} chunks)")
-        return {"route": "yes", "documents": "\n\n---\n\n".join(filtered_chunks)}
-        
+        return filtered_chunks
     except Exception as e:
-        print(f"Grader (Reranker) failed: {e}. Defaulting to yes.")
-        return {"route": "yes"}
+        print(f"Jina Reranker failed: {e}")
+        return documents[:5] # Fallback to top 5 without threshold
+
+@traceable(name="grade_documents")
+def grade_documents(state):
+    print("--- FIRST RERANK (Stage 2: Precision Filter) ---")
+    question = state["question"]
+    documents = state.get("documents", [])
+    
+    if not documents:
+        return {"route": "no", "documents": ""}
+        
+    # documents is already a list of dicts from hybrid_retriever
+    filtered_chunks = jina_rerank(question, documents, threshold=0.15)
+    
+    if not filtered_chunks:
+        print("Decision: no (all chunks filtered out by Reranker)")
+        return {"route": "no", "documents": ""}
+        
+    print(f"Decision: yes (kept {len(filtered_chunks)}/{len(documents)} chunks)")
+    return {"route": "yes", "documents": filtered_chunks}
+
+@traceable(name="graph_decision")
+def graph_decision(state):
+    print("--- GRAPH DECISION (Stage 3 & 4) ---")
+    tenant_id = state["tenant_id"]
+    documents = state.get("documents", [])
+    question = state["question"]
+    
+    # Extract entities seamlessly from the Supabase chunk metadata! Zero network hops required!
+    candidate_entities = []
+    if documents:
+        all_ents = set()
+        for doc in documents:
+            if doc.get("entities"):
+                for e in doc["entities"]:
+                    all_ents.add(e)
+        candidate_entities = list(all_ents)
+            
+    print(f"Candidate Entities extracted from chunks: {candidate_entities}")
+    
+    # Conditional Graph Decision Signals
+    high_confidence = state.get("high_confidence", False)
+    
+    # Stage 4 Rules:
+    need_graph = False
+    
+    if len(candidate_entities) > 1 and high_confidence:
+        print("Signals passed! Calling sarvam-30b to confirm graph traversal...")
+        # Call the exact same LLM (sarvam-30b) to make the final determination
+        try:
+            class GraphDecisionModel(BaseModel):
+                needs_traversal: bool = Field(description="True if traversing the graph for these entities will help answer the user query.")
+            
+            decision = sarvam_instructor.chat.completions.create(
+                model="sarvam-30b",
+                response_model=GraphDecisionModel,
+                messages=[
+                    {"role": "system", "content": "You are a precise routing agent. Determine if traversing a knowledge graph for the given entities is necessary to answer the query."},
+                    {"role": "user", "content": f"Query: {question}\\nCandidate Entities: {candidate_entities}"}
+                ],
+                temperature=0.0
+            )
+            need_graph = decision.needs_traversal
+            print(f"sarvam-30b concluded need_graph = {need_graph}")
+        except Exception as e:
+            print(f"sarvam-30b decision failed: {e}")
+            need_graph = True # fallback
+    else:
+        print("Signals failed. Bypassing graph traversal.")
+        
+    return {"need_graph": need_graph, "candidate_entities": candidate_entities}
+
+@traceable(name="graph_expansion")
+def graph_expansion(state):
+    print("--- NEO4J ONE-HOP EXPANSION (Stage 5 & 6) ---")
+    tenant_id = state["tenant_id"]
+    candidate_entities = state.get("candidate_entities", [])
+    
+    graph_context = ""
+    if not candidate_entities:
+        return {"graph_context": ""}
+        
+    try:
+        from src.database.neo4j_client import neo4j_manager
+        with neo4j_manager.driver.session() as session:
+            res = session.run("""
+                MATCH (n:Entity {tenantId: $tenant_id})-[r:RELATION]-(m:Entity {tenantId: $tenant_id})
+                WHERE n.name IN $entities
+                RETURN n.name AS source, r.type AS rel_type, m.name AS target
+                LIMIT 15
+            """, tenant_id=tenant_id, entities=candidate_entities)
+            
+            sentences = []
+            for record in res:
+                sentences.append(f"{record['source']} has the relationship {record['rel_type']} with {record['target']}.")
+                
+            if sentences:
+                graph_context = "\n".join(sentences)
+                print(f"Expanded {len(sentences)} graph relationships.")
+    except Exception as e:
+        print(f"Graph expansion failed: {e}")
+        
+    return {"graph_context": graph_context}
+
+@traceable(name="fuse_and_rerank")
+def fuse_and_rerank(state):
+    print("--- CONTEXT FUSION & SECOND RERANK (Stage 7, 8 & 9) ---")
+    documents = state.get("documents", [])
+    graph_context = state.get("graph_context", "")
+    question = state["question"]
+    
+    combined = documents.copy()
+    if graph_context:
+        graph_sentences = graph_context.split("\n")
+        for sentence in graph_sentences:
+            if sentence.strip():
+                combined.append({
+                    "content": sentence,
+                    "parent_id": "graph_expansion",
+                    "entities": [],
+                    "graph_score": 0.0,
+                    "relationship_types": []
+                })
+        
+    graph_sentence_count = len(graph_context.split('\n')) if graph_context else 0
+    print(f"Fusing {len(documents)} chunks with {graph_sentence_count} graph sentences...")
+    
+    # Second Jina Rerank (returns list of dicts)
+    final_context_list = jina_rerank(question, combined, threshold=0.15)
+    
+    # Cap to max 15 items and extract just the content strings for the Generator
+    final_context = "\n\n---\n\n".join([doc["content"] for doc in final_context_list[:15]])
+    
+    return {"documents": final_context}
+
 
 @traceable(name="generate_answer")
 def generate(state, config):
-    print("--- GENERATING FINAL ANSWER VIA SARVAM-30B ---")
+    print("--- GENERATING FINAL ANSWER VIA GROQ LLAMA 3 ---")
     question = state["question"]
     documents = state["documents"]
     preferences = state.get("preferences", {})
@@ -230,10 +400,10 @@ def generate(state, config):
     import os
     
     llm = ChatOpenAI(
-        model="sarvam-30b",
+        model="gpt-4o-mini",
         temperature=0,
-        base_url="https://api.sarvam.ai/v1",
-        api_key=os.environ.get("SARVAM_API_KEY"),
+        base_url="https://models.inference.ai.azure.com",
+        api_key=os.environ.get("GITHUB_TOKEN"),
         streaming=True
     )
     
@@ -396,8 +566,8 @@ def save_memory(state):
         system_prompt = "You are a memory distillation AI. Given an existing background context and some old chat messages, generate an updated, concise running context. Focus on key decisions."
         prompt = f"Existing Context: {current_rolling}\n\nOld Messages:\n{history_str}"
         try:
-            response = github_client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = client.client.chat.completions.create(
+                model="llama-3.1-8b-instant",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
@@ -427,8 +597,8 @@ def rewrite(state):
     question = state["question"]
     rewrite_count = state.get("rewrite_count", 0) + 1
     try:
-        decision = sarvam_instructor.chat.completions.create(
-            model="sarvam-105b",
+        decision = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
             response_model=RewrittenQuery,
             messages=[
                 {"role": "system", "content": "Reformulate this question to be highly specific for vector database search."},
@@ -471,8 +641,8 @@ def contextualize_query(state):
             "CRITICAL: Do NOT add generic phrases like 'in software development'. Maintain strict focus on the actual entities (like PostgreSQL) mentioned."
         )
             
-        decision = instructor_client.chat.completions.create(
-            model="gpt-4o-mini",
+        decision = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
             response_model=RewrittenQuery,
             messages=[
                 {"role": "system", "content": system_prompt},

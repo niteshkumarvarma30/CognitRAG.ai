@@ -17,3 +17,9 @@ class GraphState(TypedDict):
     context_block: str
     rolling_context: str
     user_facts: str
+    need_memory: bool
+    need_graph: bool
+    high_confidence: bool
+    query_entities: List[str]
+    candidate_entities: List[str]
+    graph_context: str
