@@ -98,13 +98,13 @@ graph TD
 
     classDef input fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
     classDef rerank fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fee2e2;
-    classDef graph fill:#172554,stroke:#3b82f6,stroke-width:2px,color:#dbeafe;
+    classDef kgNode fill:#172554,stroke:#3b82f6,stroke-width:2px,color:#dbeafe;
     classDef search fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#d1fae5;
     classDef llm fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px,color:#ede9fe;
     
     class A,B,C input;
     class G,K rerank;
-    class H,I,J graph;
+    class H,I,J kgNode;
     class D,E1,E2,F search;
     class L,N,M llm;
 ```
