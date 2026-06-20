@@ -74,3 +74,13 @@ def delete_user_preference(tenant_id: str, user_id: str, pref_key: str):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/v1/memory/{tenant_id}/{user_id}/episodic")
+def get_episodic_memory(tenant_id: str, user_id: str):
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    db = supabase_manager.get_tenant_client(uuid_tenant)
+    try:
+        response = db.table("episodic_memory").select("id, summary, completed_at").eq("tenant_id", uuid_tenant).eq("user_id", user_id).order("completed_at", desc=True).execute()
+        return response.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPExce
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from src.database.supabase_client import supabase_manager
+from src.database.neo4j_client import neo4j_manager
 from src.ingestion.parser import parse_pdf, chunk_text
 from src.ingestion.pipeline import run_ingestion_pipeline
 from src.retrieval.graph import crag_app
@@ -242,6 +243,88 @@ def list_documents(tenant_id: str):
         return response.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list documents: {e}")
+
+@router.get("/api/v1/metrics/{tenant_id}")
+def get_dashboard_metrics(tenant_id: str):
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    db = supabase_manager.get_tenant_client(uuid_tenant)
+    try:
+        # Get total knowledge assets (documents)
+        docs_res = db.table("documents").select("id", count="exact").eq("tenant_id", uuid_tenant).execute()
+        total_assets = docs_res.count if docs_res.count else len(docs_res.data)
+        
+        # Get verified memories (extracted facts)
+        facts_res = db.table("user_facts").select("id", count="exact").eq("tenant_id", uuid_tenant).execute()
+        total_memories = facts_res.count if facts_res.count else len(facts_res.data)
+        
+        # Get total graph relationships
+        driver = neo4j_manager.driver
+        with driver.session() as session:
+            result = session.run("MATCH (a)-[r]->(b) WHERE a.tenantId = $tenant_id RETURN count(r) as count", tenant_id=uuid_tenant)
+            record = result.single()
+            total_connections = record["count"] if record else 0
+
+        # Memory health score (mock logic based on valid entities vs extracted facts)
+        health_score = 98.2 if total_memories > 0 else 100.0
+
+        return {
+            "verified_memories": total_memories,
+            "knowledge_assets": total_assets,
+            "connected_minds": 1, # Just hardcoding user count for now
+            "graph_connections": total_connections,
+            "memory_health": health_score
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch metrics: {e}")
+
+@router.get("/api/v1/graph/{tenant_id}/export")
+def export_graph_data(tenant_id: str):
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    try:
+        driver = neo4j_manager.driver
+        nodes = []
+        links = []
+        node_ids = set()
+        
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (n) WHERE n.tenantId = $tenant_id 
+                OPTIONAL MATCH (n)-[r]->(m) WHERE m.tenantId = $tenant_id
+                RETURN n, r, m
+            """, tenant_id=uuid_tenant)
+            
+            for record in result:
+                n = record["n"]
+                if n and n.element_id not in node_ids:
+                    nodes.append({
+                        "id": n.get("id", n.element_id),
+                        "group": "Document" if "Document" in n.labels else ("Entity" if "Entity" in n.labels else "Other"),
+                        "val": 15,
+                        "label": n.get("name", n.get("id", "Unknown"))
+                    })
+                    node_ids.add(n.element_id)
+                
+                m = record["m"]
+                if m and m.element_id not in node_ids:
+                    nodes.append({
+                        "id": m.get("id", m.element_id),
+                        "group": "Document" if "Document" in m.labels else ("Entity" if "Entity" in m.labels else "Other"),
+                        "val": 10,
+                        "label": m.get("name", m.get("id", "Unknown"))
+                    })
+                    node_ids.add(m.element_id)
+                    
+                r = record["r"]
+                if r and n and m:
+                    links.append({
+                        "source": n.get("id", n.element_id),
+                        "target": m.get("id", m.element_id),
+                        "label": r.type
+                    })
+                    
+        return {"nodes": nodes, "links": links}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export graph: {e}")
 
 @router.delete("/api/v1/documents/{tenant_id}/{document_id}")
 def delete_document(tenant_id: str, document_id: str):

@@ -501,7 +501,6 @@ def save_memory(state):
         decision = sarvam_instructor.chat.completions.create(
             model="sarvam-30b",
             response_model=MemoryExtraction,
-            mode=instructor.Mode.JSON,
             messages=[
                 {"role": "system", "content": "Extract highly specific, discrete facts about the user's setup, and ALSO extract any explicit rules or preferences they want the assistant to follow (like 'always reply in Spanish' or 'use bullet points'). If there are no new facts or preferences, return empty lists/dicts."},
                 {"role": "user", "content": interaction}
@@ -517,7 +516,6 @@ def save_memory(state):
                 "fact": fact,
                 "embedding": fact_emb
             }).execute()
-            print(f"Extracted Fact: {fact}")
             
         # Save Preferences
         for pref_key, pref_val in decision.preferences.items():
@@ -527,7 +525,6 @@ def save_memory(state):
                 "pref_key": pref_key,
                 "pref_value": pref_val
             }).execute()
-            print(f"Extracted Preference: {pref_key} = {pref_val}")
             
     except Exception as e:
         print(f"Extraction failed: {e}")
@@ -556,8 +553,8 @@ def save_memory(state):
     total_messages = len(chat_history) + 2 
     new_summary = current_rolling
     
-    if total_messages > 8: # More than 4 complete turns
-        old_messages = chat_history[:-4]
+    if total_messages > 2: # Trigger summary much faster for testing
+        old_messages = chat_history[:-2]
         history_str = ""
         for msg in old_messages:
             role = "User" if msg["role"] == "user" else "Assistant"
