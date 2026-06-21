@@ -111,6 +111,13 @@ def process_parent_chunk(parent_text: str, tenant_id: str, document_id: str):
     print("    -> Resolving Coreferences...")
     resolved_chunk = resolve_coreferences(parent_text)
     
+    # Check for cancellation: If the user deleted the document mid-ingestion, abort.
+    db = supabase_manager.get_tenant_client(tenant_id)
+    check = db.table("documents").select("id").eq("id", document_id).execute()
+    if not check.data:
+        print(f"    -> Document {document_id} was deleted. Aborting background thread.")
+        return
+
     # 2. Entity and Relationship Extraction
     print("    -> Extracting Graph Entities...")
     entities = []

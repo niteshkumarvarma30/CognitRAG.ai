@@ -117,7 +117,7 @@ def route_query(state):
     question = state["question"]
     try:
         res = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             response_model=RouteDecision,
             messages=[
                 {"role": "system", "content": "Classify the intent of the user query. ONLY return 'greeting' or 'faq' for pure small talk (like 'hello', 'who are you'). Return 'conversational' if the user asks about the conversation history itself. Return 'personal' for questions about user preferences. Return 'followup' for queries needing previous chat context. CRITICAL: Any query asking 'What are', 'How to', 'What is the default', or anything about configurations, options, variables, parameters, or technical terms MUST ALWAYS be classified as 'technical_query'. When in doubt, default to 'technical_query'. Also extract technical entities and determine if memory or graph search is needed."},
@@ -173,10 +173,13 @@ def retrieve(state):
                 from src.retrieval.hybrid import get_embedding
                 query_embedding = get_embedding(question)
                 
+            import uuid
+            uuid_user = str(uuid.uuid5(uuid.NAMESPACE_DNS, user_id)) if not "-" in user_id else user_id
+                
             fact_res = db.rpc("match_user_facts", {
                 "p_query_embedding": query_embedding,
                 "p_tenant_id": tenant_id,
-                "p_user_id": user_id,
+                "p_user_id": uuid_user,
                 "match_threshold": 0.5,
                 "match_count": 3
             }).execute()
@@ -372,8 +375,9 @@ def generate(state, config):
     system_prompt = (
         "You are an expert SaaS support assistant. "
         "Answer the user's question using the provided Context, Relevant User Facts, Rolling Context, and Recent Chat History. "
-        "If the user asks about the conversation itself, answer using the Recent Chat History. "
-        "You must ONLY answer in English. If the answer cannot be found in ANY of the provided information, say exactly 'I don't know.'"
+        "If the user asks about the conversation itself, answer using the Recent Chat History and Rolling Context. "
+        "You must ONLY answer in English. If the user asks a factual question about their documents and the answer cannot be found in the context, say exactly 'I don't know.' "
+        "However, if the user asks about your conversation history or memory and it is empty, you should respond naturally (e.g., 'We haven't discussed anything yet!')."
     )
     
     if preferences:
@@ -461,10 +465,14 @@ def load_memory(state):
             query_embedding = state.get("query_embedding")
             if not query_embedding:
                 query_embedding = get_embedding(question)
+                
+            import uuid
+            uuid_user = str(uuid.uuid5(uuid.NAMESPACE_DNS, user_id)) if not "-" in user_id else user_id
+                
             fact_res = db.rpc("match_user_facts", {
                 "p_query_embedding": query_embedding,
                 "p_tenant_id": tenant_id,
-                "p_user_id": user_id,
+                "p_user_id": uuid_user,
                 "match_threshold": 0.5,
                 "match_count": 3
             }).execute()
@@ -560,8 +568,12 @@ def save_memory(state):
             role = "User" if msg["role"] == "user" else "Assistant"
             history_str += f"{role}: {msg['content']}\n"
             
-        system_prompt = "You are a memory distillation AI. Given an existing background context and some old chat messages, generate an updated, concise running context. Focus on key decisions."
-        prompt = f"Existing Context: {current_rolling}\n\nOld Messages:\n{history_str}"
+        system_prompt = (
+            "You are a background memory distillation AI. Your ONLY job is to output a concise running summary of the chat history. "
+            "DO NOT output conversational filler like 'Here is the summary' or 'I need more context'. "
+            "If there is nothing meaningful to summarize yet, output exactly the word: EMPTY_MEMORY"
+        )
+        prompt = f"Existing Context:\n{current_rolling}\n\nOld Messages to Incorporate:\n{history_str}\n\nOUTPUT ONLY THE SUMMARY OR 'EMPTY_MEMORY':"
         try:
             response = client.client.chat.completions.create(
                 model="llama-3.1-8b-instant",
@@ -575,7 +587,7 @@ def save_memory(state):
             print(f"Rolling summary failed: {e}")
             
     # Save the rolling context to episodic_memory ONLY if it was newly generated
-    if new_summary != current_rolling and new_summary.strip():
+    if new_summary != current_rolling and new_summary.strip() and "EMPTY_MEMORY" not in new_summary:
         try:
             db.table("episodic_memory").insert({
                 "tenant_id": tenant_id,
@@ -598,7 +610,7 @@ def rewrite(state):
             model="llama-3.1-8b-instant",
             response_model=RewrittenQuery,
             messages=[
-                {"role": "system", "content": "Reformulate this question to be highly specific for vector database search."},
+                {"role": "system", "content": "You are a search query rewriter. Your ONLY job is to output a new reformulated search query based on the user's input to make it better for a vector database search. DO NOT provide explanations, do NOT converse. Just output the new query."},
                 {"role": "user", "content": question}
             ]
         )
@@ -612,7 +624,7 @@ def rewrite(state):
 
 def generate_cached(state):
     print("--- GENERATING CACHED RESPONSE ---")
-    return {"generation": "Hello! I am your AI Support Assistant. I'm ready to help you with technical questions about your infrastructure."}
+    return {"generation": state.get("generation", "Error: No cached generation found.")}
 
 @traceable(name="contextualize_query")
 def contextualize_query(state):

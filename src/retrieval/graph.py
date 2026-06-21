@@ -49,7 +49,12 @@ workflow.add_edge("embed_query", "check_cache")
 workflow.add_conditional_edges("check_cache", decide_cache, {"save_memory": "save_memory", "route_query": "route_query"})
 workflow.add_conditional_edges("route_query", decide_route, {"generate_cached": "generate_cached", "load_memory": "load_memory", "retrieve": "retrieve"})
 workflow.add_edge("load_memory", "contextualize_query")
-workflow.add_edge("contextualize_query", "retrieve")
+def decide_post_contextualize(state):
+    if state.get("route") in ["conversational"]:
+        return "generate"
+    return "retrieve"
+
+workflow.add_conditional_edges("contextualize_query", decide_post_contextualize, {"generate": "generate", "retrieve": "retrieve"})
 
 workflow.add_edge("retrieve", "grade_documents")
 workflow.add_conditional_edges("grade_documents", decide_grade, {"graph_decision": "graph_decision", "rewrite": "rewrite", "generate": "generate"})

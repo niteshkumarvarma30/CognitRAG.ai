@@ -221,7 +221,7 @@ def get_billing(tenant_id: str):
     uuid_tenant = get_tenant_uuid(tenant_id)
     db = supabase_manager.get_tenant_client(uuid_tenant)
     try:
-        response = db.table("transactions").select("tokens_used").eq("tenant_id", uuid_tenant).execute()
+        response = db.table("transactions").select("*").eq("tenant_id", uuid_tenant).order("created_at", desc=True).execute()
         total_tokens = sum(row.get("tokens_used", 0) for row in response.data)
         
         estimated_cost_usd = (total_tokens / 1000.0) * 0.001
@@ -229,7 +229,8 @@ def get_billing(tenant_id: str):
         return {
             "tenant_id": tenant_id, # return the original clerk id to the frontend
             "total_tokens_used": total_tokens,
-            "estimated_cost_usd": round(estimated_cost_usd, 6)
+            "estimated_cost_usd": round(estimated_cost_usd, 6),
+            "transactions": response.data
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch billing data: {e}")
