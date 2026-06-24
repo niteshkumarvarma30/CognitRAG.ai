@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth, SignInButton } from '@clerk/nextjs';
 import { Brain, Search, Clock, Network, ArrowRight, Server, Database, Bot, FileText, Lock, Users, AlertTriangle, Link as LinkIcon, Shield, Compass, Cpu } from 'lucide-react';
 import FloatingGraphBackground from '@/components/layout/FloatingGraphBackground';
 
@@ -39,7 +39,17 @@ const FadeInSection = ({ children, delay = '0s' }) => {
 
 const LandingPage = () => {
   const router = useRouter();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, signOut } = useAuth();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('sign_out=true')) {
+       // Force clear the stale frontend session
+       signOut();
+       alert("Your session has expired. Please sign in again.");
+       // Clean up URL
+       window.history.replaceState({}, document.title, "/");
+    }
+  }, [signOut]);
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh', width: '100%', overflowX: 'hidden' }}>
@@ -51,8 +61,8 @@ const LandingPage = () => {
         {/* 1. Hero Section */}
         <FadeInSection>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', maxWidth: '900px', marginTop: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.5rem 1.5rem', borderRadius: '9999px', fontSize: '1rem', fontWeight: '500', color: '#60a5fa', backdropFilter: 'blur(10px)' }}>
-              <div style={{ width: '8px', height: '8px', backgroundColor: '#60a5fa', borderRadius: '50%', boxShadow: '0 0 10px #60a5fa', animation: 'pulse 2s infinite' }}></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(147, 51, 234, 0.15) 100%)', border: '1px solid rgba(96, 165, 250, 0.5)', padding: '0.6rem 2rem', borderRadius: '9999px', fontSize: '1.15rem', fontWeight: '700', color: '#bfdbfe', backdropFilter: 'blur(10px)', boxShadow: '0 0 20px rgba(59, 130, 246, 0.4), inset 0 0 15px rgba(147, 51, 234, 0.2)', textTransform: 'uppercase', letterSpacing: '1px', textShadow: '0 0 10px rgba(191, 219, 254, 0.6)' }}>
+              <div style={{ width: '10px', height: '10px', backgroundColor: '#60a5fa', borderRadius: '50%', boxShadow: '0 0 15px #93c5fd, 0 0 5px #fff', animation: 'pulse 1.5s infinite' }}></div>
               Graph-Powered Workspace Intelligence
             </div>
             
@@ -72,11 +82,11 @@ const LandingPage = () => {
                   Enter Workspace <ArrowRight size={20} style={{ marginLeft: '0.5rem' }} />
                 </button>
               ) : (
-                <>
-                <button className="btn-primary" onClick={() => router.push('/sign-in')} style={{ fontSize: '1.1rem', padding: '1rem 2rem', boxShadow: '0 10px 25px -5px rgba(59, 130, 246, 0.5)' }}>
-                  Sign In to Start <ArrowRight size={20} style={{ marginLeft: '0.5rem' }} />
-                </button>
-                </>
+                <SignInButton mode="modal" forceRedirectUrl="/home">
+                  <button className="btn-primary" style={{ fontSize: '1.1rem', padding: '1rem 2rem', boxShadow: '0 10px 25px -5px rgba(59, 130, 246, 0.5)' }}>
+                    Sign In to Start <ArrowRight size={20} style={{ marginLeft: '0.5rem' }} />
+                  </button>
+                </SignInButton>
               )}
             </div>
           </div>

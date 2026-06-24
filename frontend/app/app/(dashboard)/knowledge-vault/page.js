@@ -38,6 +38,14 @@ const KnowledgeVault = () => {
         return;
     }
     
+    // 20MB limit check (20 * 1024 * 1024 bytes)
+    if (selectedFile.size > 20971520) {
+        setUploadStatus('File too large. Max 20MB.');
+        setTimeout(() => setUploadStatus(''), 4000);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+    }
+    
     setUploadStatus('Uploading & Extracting...');
     const formData = new FormData();
     formData.append('file', selectedFile);

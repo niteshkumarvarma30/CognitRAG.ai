@@ -187,6 +187,10 @@ async def ingest_document(
     uuid_tenant = get_tenant_uuid(tenant_id)
     pdf_bytes = await file.read()
     
+    # 20MB limit check (20 * 1024 * 1024 bytes)
+    if len(pdf_bytes) > 20971520:
+        raise HTTPException(status_code=413, detail="File size exceeds the 20MB limit.")
+    
     admin_db = supabase_manager.get_admin_client()
     try:
         # Ensure the tenant exists in the Supabase `tenants` table. 
