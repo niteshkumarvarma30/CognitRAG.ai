@@ -10,6 +10,7 @@ from src.retrieval.graph import crag_app
 from fastapi.responses import StreamingResponse
 import json
 import uuid
+import requests
 
 router = APIRouter()
 
@@ -22,6 +23,13 @@ class ChatRequest(BaseModel):
     user_id: Optional[str] = "default_user"
     message: str
     chat_history: Optional[List[Dict[str, Any]]] = []
+
+class GoogleDriveIngestRequest(BaseModel):
+    file_id: str
+    file_name: str
+    mime_type: str
+    access_token: str
+    tenant_id: str
 
 @router.post("/api/v1/chat")
 def chat_endpoint(request: ChatRequest):
@@ -219,6 +227,43 @@ async def ingest_document(
         print(f"Insertion failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/api/v1/ingest/google-drive")
+async def ingest_google_drive(request: GoogleDriveIngestRequest, background_tasks: BackgroundTasks):
+    uuid_tenant = get_tenant_uuid(request.tenant_id)
+    
+    headers = {"Authorization": f"Bearer {request.access_token}"}
+    
+    try:
+        # If it's a Google Doc, we need to export it as text. Otherwise we download media.
+        if "google-apps.document" in request.mime_type:
+            url = f"https://www.googleapis.com/drive/v3/files/{request.file_id}/export?mimeType=text/plain"
+        else:
+            url = f"https://www.googleapis.com/drive/v3/files/{request.file_id}?alt=media"
+            
+        resp = requests.get(url, headers=headers)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Failed to fetch file from Google Drive: {resp.text}")
+            
+        file_bytes = resp.content
+        
+        admin_db = supabase_manager.get_admin_client()
+        admin_db.table("tenants").upsert({"id": uuid_tenant, "name": f"Company {request.tenant_id}"}).execute()
+        
+        db = supabase_manager.get_tenant_client(uuid_tenant)
+        db_resp = db.table("documents").insert({
+            "tenant_id": uuid_tenant,
+            "filename": request.file_name,
+            "status": "pending"
+        }).execute()
+        
+        document_id = db_resp.data[0]['id']
+        background_tasks.add_task(background_ingestion_pipeline, uuid_tenant, document_id, file_bytes)
+        
+        return {"message": "Google Drive ingestion started", "document_id": document_id}
+    except Exception as e:
+        print(f"Drive insertion failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/api/v1/billing/{tenant_id}")
 def get_billing(tenant_id: str):
     """Calculates the total tokens used by a tenant and the estimated bill."""
@@ -269,13 +314,18 @@ def get_dashboard_metrics(tenant_id: str):
             record = result.single()
             total_connections = record["count"] if record else 0
 
+        # Get integrations count
+        admin_db = supabase_manager.get_admin_client()
+        integrations_res = admin_db.table("tenant_integrations").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+        total_integrations = integrations_res.count if integrations_res.count else len(integrations_res.data)
+
         # Memory health score (mock logic based on valid entities vs extracted facts)
         health_score = 98.2 if total_memories > 0 else 100.0
 
         return {
             "verified_memories": total_memories,
             "knowledge_assets": total_assets,
-            "connected_minds": 1, # Just hardcoding user count for now
+            "connected_minds": 1 + total_integrations, # User + Integrations
             "graph_connections": total_connections,
             "memory_health": health_score
         }
