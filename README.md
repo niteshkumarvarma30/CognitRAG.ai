@@ -42,27 +42,33 @@ graph TD
     Contextualize --> Router{"Intelligent Router<br/>(Groq/Llama-3)"}
     
     %% Routing
-    Router -->|Greeting / FAQ| StreamGen
+    Router -->|Greeting / FAQ| StreamGen["Response Generator<br/>(gpt-4o-mini SSE Stream)"]
     Router -->|Conversational| StreamGen
-    Router -->|Technical Query| HybridSearch["Concurrent Hybrid Search"]
+    Router -->|Technical Query| HybridSearch["Hybrid Retrieval<br/>(BM25 + Vector)"]
     
     %% Retrieval
-    subgraph Retrieval Phase
+    subgraph Vector Retrieval Phase
         HybridSearch --> VS[("Supabase Vector<br/>(HNSW)")]
         HybridSearch --> KS[("Supabase Keyword<br/>(BM25)")]
-        HybridSearch --> GS[("Neo4j Graph<br/>(Cypher)")]
-        VS & KS & GS --> RRF["Reciprocal Rank Fusion<br/>(Top 5)"]
     end
     
-    %% Reranking
-    RRF --> Grader{"Jina Cross-Encoder<br/>(Score >= 0.05?)"}
+    %% First Rerank
+    VS & KS --> Grader{"First Jina Rerank<br/>(Score >= 0.15?)"}
     
-    Grader -->|Pass| StreamGen["Response Generator<br/>(gpt-4o-mini SSE Stream)"]
+    %% CRAG
     Grader -->|Fail All| CRAG{"CRAG Rewrite Node<br/>(Rewrite Count < 1?)"}
-    
     CRAG -->|Yes| RewriteLLM["Rewrite Query"]
     RewriteLLM --> HybridSearch
     CRAG -->|No| StreamGen
+    
+    %% Graph Expansion
+    Grader -->|Pass| GraphDecision{"Graph Expansion Decision<br/>(Entities & Confidence)"}
+    GraphDecision -->|No| StreamGen
+    GraphDecision -->|Yes| GraphExpand[("Neo4j Graph Expansion")]
+    
+    %% Fusion & Second Rerank
+    GraphExpand --> Fuse{"Context Fusion &<br/>Second Jina Rerank"}
+    Fuse --> StreamGen
     
     %% Background Extraction
     StreamGen --> Output([Show Output])
@@ -85,10 +91,12 @@ graph TD
 2. **Stateful Memory Injection (`load_memory`):** Fetches the user's Long-Term Memory (Rules/Preferences, Vector Facts, and Episodic chat summaries) and injects it into the LangGraph state.
 3. **Query Contextualization (`contextualize_query`):** Rewrites follow-up questions using short-term chat history into standalone queries.
 4. **Intelligent Routing (`route_query`):** Categorizes intent. `Greeting` or `Conversational` intents bypass Vector Search entirely, heading straight to the Generator.
-5. **Concurrent Hybrid Retrieval (`retrieve`):** Simultaneously queries Vectors (HNSW), Keywords (BM25), and Knowledge Graph (Neo4j). Fuses results using **Reciprocal Rank Fusion (RRF)**.
-6. **Precision Reranking & CRAG (`grade_documents`):** The Top 5 chunks are graded by `jina-reranker-v2`. Any chunk below `0.05` is discarded. If all chunks fail, a CRAG loop rewrites the query and tries again.
-7. **Asynchronous Streaming (`generate`):** Validated chunks, preferences, and history are sent to `gpt-4o-mini`. Tokens stream instantly back to the UI via Server-Sent Events (SSE).
-8. **Background Extraction (`save_memory`):** After the response, a background thread uses `sarvam-30b` to extract new facts and explicit preferences, dynamically connect the Neo4j `(User)` node, and distill older messages into a rolling summary.
+5. **Retrieval (`retrieve`):** Queries Vectors (HNSW) and Keywords (BM25) to fetch initial document candidates.
+6. **First Rerank & CRAG (`grade_documents`):** The retrieved chunks are graded by `jina-reranker-v2`. Any chunk scoring below `0.15` is discarded. If all chunks fail, a CRAG loop rewrites the query and searches again (max 1 rewrite).
+7. **Graph Decision & Expansion (`graph_decision`):** If surviving chunks contain multiple entities and search confidence was high, a cheap LLM call verifies if traversing the graph is needed. If true, relationships are fetched from the Neo4j Knowledge Graph.
+8. **Context Fusion & Second Rerank (`fuse_and_rerank`):** The new graph sentences are combined with the vector chunks, and the Jina reranker runs a second time to fuse and select the most relevant mixed context pool.
+9. **Asynchronous Streaming (`generate`):** The final context (Top 15 items), preferences, and history are sent to `gpt-4o-mini`. Tokens stream instantly back to the UI via Server-Sent Events (SSE).
+10. **Background Extraction (`save_memory`):** After the response, a background thread uses `sarvam-30b` to extract new facts, dynamically connect the Neo4j `(User)` node, and distill older messages into a rolling summary.
 
 ## Frontend UI & Authentication
 The platform features a modern React (Vite) frontend, split into two primary interfaces:
