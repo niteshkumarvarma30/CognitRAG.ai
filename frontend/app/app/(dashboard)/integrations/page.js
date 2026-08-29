@@ -101,7 +101,7 @@ export default function IntegrationsPage() {
     }
 
     if (connector.id === 'google-drive') {
-      window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/integrations/google-drive/login`;
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/integrations/google-drive/auth?tenant_id=ws_1`;
       return;
     }
   };
