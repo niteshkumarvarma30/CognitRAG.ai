@@ -12,13 +12,13 @@ import os
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
-import mlflow
+# import mlflow
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Initializing MLflow...")
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    # print("Initializing MLflow...")
+    # mlflow.set_tracking_uri("sqlite:///mlflow.db")
     # Removed setting the deleted experiment to prevent startup crashes
     
     # Disable autologging during batch evaluation to prevent 15-minute delays
