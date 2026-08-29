@@ -24,4 +24,4 @@ COPY src/ ./src/
 EXPOSE 8000
 
 # Start the FastAPI application via uvicorn
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
