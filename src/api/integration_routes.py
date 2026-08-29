@@ -226,3 +226,133 @@ def ingest_github_repo(request: GithubIngestRequest, background_tasks: Backgroun
             files_queued += 1
             
     return {"message": f"Successfully queued {files_queued} markdown/text files for ingestion from {request.repo_full_name}."}
+# Append these routes to integration_routes.py
+@router.get("/api/v1/integrations/slack/auth")
+async def slack_auth(tenant_id: str):
+    """Redirects the user to the Slack OAuth approval screen."""
+    SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "mock_client_id")
+    REDIRECT_URI = "http://localhost:8000/api/v1/integrations/slack/callback"
+    auth_url = (
+        f"https://slack.com/oauth/v2/authorize?"
+        f"client_id={SLACK_CLIENT_ID}&scope=channels:history,channels:read,users:read&state={tenant_id}"
+        f"&redirect_uri={REDIRECT_URI}"
+    )
+    return RedirectResponse(auth_url)
+
+@router.get("/api/v1/integrations/slack/callback")
+async def slack_callback(code: str, state: str):
+    """Receives the OAuth code from Slack."""
+    # In a real app, exchange `code` for a token here.
+    return RedirectResponse(f"{FRONTEND_URL}/integrations?status=success")
+
+@router.get("/api/v1/integrations/jira/auth")
+async def jira_auth(tenant_id: str):
+    """Redirects the user to the Jira OAuth approval screen."""
+    JIRA_CLIENT_ID = os.environ.get("JIRA_CLIENT_ID", "mock_client_id")
+    REDIRECT_URI = "http://localhost:8000/api/v1/integrations/jira/callback"
+    auth_url = (
+        f"https://auth.atlassian.com/authorize?"
+        f"audience=api.atlassian.com&client_id={JIRA_CLIENT_ID}&scope=read:jira-work&redirect_uri={REDIRECT_URI}"
+        f"&state={tenant_id}&response_type=code&prompt=consent"
+    )
+    return RedirectResponse(auth_url)
+
+@router.get("/api/v1/integrations/jira/callback")
+async def jira_callback(code: str, state: str):
+    """Receives the OAuth code from Jira."""
+    return RedirectResponse(f"{FRONTEND_URL}/integrations?status=success")
+
+@router.get("/api/v1/integrations/google-drive/auth")
+async def gdrive_auth(tenant_id: str):
+    """Redirects the user to the Google Drive OAuth approval screen."""
+    GDRIVE_CLIENT_ID = os.environ.get("GDRIVE_CLIENT_ID", "mock_client_id")
+    REDIRECT_URI = "http://localhost:8000/api/v1/integrations/google-drive/callback"
+    auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={GDRIVE_CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code"
+        f"&scope=https://www.googleapis.com/auth/drive.readonly&state={tenant_id}&access_type=offline"
+    )
+    return RedirectResponse(auth_url)
+
+@router.get("/api/v1/integrations/google-drive/callback")
+async def gdrive_callback(code: str, state: str):
+    """Receives the OAuth code from Google Drive."""
+    return RedirectResponse(f"{FRONTEND_URL}/integrations?status=success")
+
+from src.integrations.slack_crawler import SlackCrawler
+
+class SlackIngestRequest(BaseModel):
+    tenant_id: str
+
+@router.post("/api/v1/ingest/slack")
+def ingest_slack(request: SlackIngestRequest, background_tasks: BackgroundTasks):
+    """Triggers the background crawler to index Slack channels."""
+    try:
+        crawler = SlackCrawler(request.tenant_id)
+        queued = crawler.crawl_and_ingest(background_tasks)
+        return {"message": f"Successfully queued {queued} Slack threads for ingestion."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Slack ingestion failed: {e}")
+
+from fastapi import Request
+from src.integrations.github_crawler import GitHubCrawler
+
+@router.post("/api/v1/webhooks/github/{tenant_id}")
+async def github_webhook(tenant_id: str, request: Request, background_tasks: BackgroundTasks):
+    """
+    Receives GitHub webhook events.
+    In a production app, verify X-Hub-Signature-256 here.
+    """
+    event = request.headers.get("X-GitHub-Event")
+    payload = await request.json()
+    
+    try:
+        crawler = GitHubCrawler(tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    queued = 0
+    if event == "push":
+        queued = crawler.process_push_event(payload, background_tasks)
+    elif event == "pull_request":
+        queued = crawler.process_pull_request_event(payload, background_tasks)
+        
+    return {"status": "success", "event": event, "queued_chunks": queued}
+
+from src.integrations.jira_crawler import JiraCrawler
+
+class JiraIngestRequest(BaseModel):
+    tenant_id: str
+    jql: str = "ORDER BY updated DESC"
+
+@router.post("/api/v1/ingest/jira")
+def ingest_jira(request: JiraIngestRequest, background_tasks: BackgroundTasks):
+    """Triggers the background crawler to index Jira issues via JQL."""
+    try:
+        crawler = JiraCrawler(request.tenant_id)
+        queued = crawler.crawl_and_ingest(background_tasks, jql=request.jql)
+        return {"message": f"Successfully queued {queued} Jira tickets for ingestion."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Jira ingestion failed: {e}")
+
+from src.integrations.gdrive_crawler import GDriveCrawler
+
+class GDriveIngestRequest(BaseModel):
+    tenant_id: str
+    query: str = None
+
+@router.post("/api/v1/ingest/gdrive")
+def ingest_gdrive(request: GDriveIngestRequest, background_tasks: BackgroundTasks):
+    """Triggers the background crawler to index Google Drive documents."""
+    try:
+        crawler = GDriveCrawler(request.tenant_id)
+        queued = crawler.crawl_and_ingest(background_tasks, query=request.query)
+        return {"message": f"Successfully queued {queued} Google Drive documents for ingestion."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google Drive ingestion failed: {e}")

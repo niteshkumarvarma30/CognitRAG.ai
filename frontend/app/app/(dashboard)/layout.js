@@ -1,15 +1,10 @@
 import React from 'react';
-import SidebarNavigation from '@/components/layout/SidebarNavigation';
+import AppShell from '@/components/layout/AppShell';
 
 export default function DashboardLayout({ children }) {
   return (
-    <div className="dashboard-layout">
-      <SidebarNavigation />
-      <main className="main-content">
-        <div className="page-container">
-          {children}
-        </div>
-      </main>
-    </div>
+    <AppShell>
+      {children}
+    </AppShell>
   );
 }

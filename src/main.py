@@ -4,7 +4,13 @@ from fastapi.staticfiles import StaticFiles
 from src.api.routes import router as main_router
 from src.api.memory_routes import router as memory_router
 from src.api.integration_routes import router as integration_router
+from src.api.semantic_routes import router as semantic_router
+from src.api.workspace_routes import router as workspace_router
+from src.api.security_routes import router as security_router
+from src.api.billing_routes import router as billing_router
 import os
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 import mlflow
 from contextlib import asynccontextmanager
@@ -19,7 +25,7 @@ async def lifespan(app: FastAPI):
     # mlflow.langchain.autolog()
     yield
 
-app = FastAPI(title="Hybrid RAG SaaS API", lifespan=lifespan)
+app = FastAPI(title="CognitRAG API", lifespan=lifespan)
 
 # Add CORS so the widget can be embedded on any external customer domain securely
 app.add_middleware(
@@ -30,17 +36,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(workspace_router)
+app.include_router(security_router)
+app.include_router(billing_router)
 app.include_router(main_router)
 app.include_router(memory_router)
 app.include_router(integration_router)
+app.include_router(semantic_router)
 
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Hybrid RAG SaaS"}
-
-# Mount public directory for serving the widget locally
-os.makedirs("src/public", exist_ok=True)
-app.mount("/", StaticFiles(directory="src/public", html=True), name="public")
 
 if __name__ == "__main__":
     import uvicorn

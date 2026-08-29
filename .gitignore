@@ -1,4 +1,4 @@
-.venv/
+﻿.venv/
 __pycache__/
 .env
 *.pdf
@@ -6,3 +6,10 @@ search_results.txt
 *.log
 mlruns/
 mlflow.db
+*.json
+*.jsonl
+*.csv
+scratch/
+scripts/test_*.py
+scripts/list_bedrock_models.py
+tests/list_gemini.py

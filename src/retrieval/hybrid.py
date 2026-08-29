@@ -4,10 +4,7 @@ from src.database.neo4j_client import neo4j_manager
 from src.retrieval.cache import LRUCache
 import openai
 
-oai_client = openai.OpenAI(
-    api_key=os.environ.get("JINA_API_KEY", ""),
-    base_url="https://api.jina.ai/v1"
-)
+
 
 embedding_cache = LRUCache(max_size=1000)
 
@@ -18,31 +15,34 @@ def get_embedding(text: str) -> list[float]:
         print("[Cache Hit] Fetched embedding from local LRU cache in 0ms")
         return cached
 
-    print("[Cache Miss] Fetching embedding from Jina API...")
-    response = oai_client.embeddings.create(
-        input=text, model="jina-embeddings-v4", dimensions=1536
+    print("[Cache Miss] Fetching embedding from Bedrock API...")
+    import litellm
+    response = litellm.embedding(
+        model="bedrock/amazon.titan-embed-text-v2:0",
+        input=[text]
     )
     vec = response.data[0].embedding
     embedding_cache.put(key, vec, ttl_seconds=3600)  # Cache for 1 hour
     return vec
 
-def vector_search(tenant_id: str, query: str, query_embedding: list[float], top_k: int = 20) -> list[dict]:
+def vector_search(tenant_id: str, query: str, query_embedding: list[float], top_k: int = 20, user_id: str = None) -> list[dict]:
     """Cosine Similarity search using pgvector via custom RPC."""
-    db = supabase_manager.get_tenant_client(tenant_id)
+    db = supabase_manager.get_admin_client()
     try:
         response = db.rpc("match_document_chunks", {
             "query_embedding": query_embedding,
             "match_count": top_k,
             "p_tenant_id": tenant_id
+
         }).execute()
         return response.data if response.data else []
     except Exception as e:
         print(f"Vector search failed: {e}")
         return []
 
-def keyword_search(tenant_id: str, query: str, top_k: int = 20) -> list[dict]:
+def keyword_search(tenant_id: str, query: str, top_k: int = 20, user_id: str = None) -> list[dict]:
     """BM25 equivalent using Postgres Full Text Search."""
-    db = supabase_manager.get_tenant_client(tenant_id)
+    db = supabase_manager.get_admin_client()
     try:
         # The python client does not support type='websearch', so we manually build an OR query
         words = [word.lower() for word in query.replace("?", "").replace(",", "").split() if len(word) > 3]
@@ -151,9 +151,9 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
                 }
             scores[grouping_key] += final_weight * (1.0 / (k + rank + 1))
             
-    add_to_scores(vector_res, base_weight=2.0)  # Boost vector semantics
-    add_to_scores(keyword_res, base_weight=1.5) # Re-boost keyword for exact matches like im4gn.4xlarge
-    add_to_scores(graph_res, base_weight=0.3)
+    add_to_scores(vector_res, base_weight=2.0)
+    add_to_scores(keyword_res, base_weight=1.5)
+    add_to_scores(graph_res, base_weight=0.5) # Increased weight for Neo4j edges!
     
     # Sort descending by RRF score
     sorted_contents = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
@@ -183,25 +183,28 @@ def compute_rrf(vector_res, keyword_res, graph_res, k=60):
 import concurrent.futures
 
 def hybrid_retriever(tenant_id: str, user_id: str, query: str, query_embedding: list[float], top_k: int = 5):
-    """Executes Vector and Keyword searches in parallel, and fuses them with RRF."""
-    print("  -> Running Hybrid Search (Vector + Keyword).")
+    """Executes Vector, Keyword, and Graph searches in parallel, and fuses them with RRF."""
+    print("  -> Running True Hybrid Search (Vector + Keyword + Neo4j Graph).")
     
-    v_res, k_res = [], []
+    v_res, k_res, g_res = [], [], []
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        future_v = executor.submit(vector_search, tenant_id, query, query_embedding)
-        future_k = executor.submit(keyword_search, tenant_id, query)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        future_v = executor.submit(vector_search, tenant_id, query, query_embedding, 20, user_id)
+        future_k = executor.submit(keyword_search, tenant_id, query, 20, user_id)
+        future_g = executor.submit(graph_search, tenant_id, user_id, query, None, 20)
         
         v_res = future_v.result()
         k_res = future_k.result()
+        g_res = future_g.result()
     
     print("  -> Applying Reciprocal Rank Fusion (RRF)...")
-    fused_docs, high_conf = compute_rrf(v_res, k_res, [])
+    # We increase graph weight to 0.5 to ensure relationship edges bubble up
+    fused_docs, high_conf = compute_rrf(v_res, k_res, g_res)
     
     # DYNAMIC TOKEN BUDGETING
-    # Sarvam-30B context window is 8192 tokens. Let's aim for max 6000 tokens for context to leave room for system prompt, history, and generation.
-    # 1 token ~= 4 characters roughly. So max_chars = 24000.
-    max_chars = 24000
+    # Groq TPM limit is 8000 tokens. Let's aim for max 2500 tokens for context.
+    # 1 token ~= 4 characters roughly. So max_chars = 10000.
+    max_chars = 10000
     current_chars = len(query) # base query length
     
     top_contexts = []

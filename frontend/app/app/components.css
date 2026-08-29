@@ -1,0 +1,245 @@
+/* ============================================================
+   CognitRAG Component Styles
+   CSS for Button, Input, Card, Badge, Skeleton UI primitives
+   ============================================================ */
+
+/* ── Button Component ── */
+.cr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
+  border: none;
+  white-space: nowrap;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.cr-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.cr-btn--sm { font-size: 0.8125rem; padding: 6px 12px; }
+.cr-btn--md { font-size: 0.875rem;  padding: 8px 16px; }
+.cr-btn--lg { font-size: 0.9375rem; padding: 10px 24px; }
+
+.cr-btn--primary {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(99, 91, 255, 0.3);
+}
+.cr-btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  box-shadow: 0 4px 12px rgba(99, 91, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.cr-btn--secondary {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.cr-btn--secondary:hover:not(:disabled) {
+  background: var(--surface-soft);
+  border-color: var(--border-strong);
+}
+
+.cr-btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.cr-btn--ghost:hover:not(:disabled) {
+  background: var(--surface-soft);
+  color: var(--text-primary);
+}
+
+.cr-btn--danger {
+  background: var(--error);
+  color: #fff;
+}
+.cr-btn--danger:hover:not(:disabled) {
+  background: #B91C1C;
+}
+
+.cr-btn__spinner {
+  display: flex;
+  align-items: center;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Input Component ── */
+.cr-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cr-input__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cr-input__container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cr-input__container--sm .cr-input { padding: 6px 10px; font-size: 0.8125rem; }
+.cr-input__container--md .cr-input { padding: 8px 12px; font-size: 0.875rem; }
+.cr-input__container--lg .cr-input { padding: 10px 14px; font-size: 0.9375rem; }
+
+.cr-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: all var(--duration-fast) ease;
+}
+
+.cr-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.cr-input::placeholder { color: var(--text-muted); }
+
+.cr-input--has-icon-left  { padding-left: 36px !important; }
+.cr-input--has-icon-right { padding-right: 36px !important; }
+
+.cr-input__icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.cr-input__icon--left  { left: 10px; }
+.cr-input__icon--right { right: 10px; }
+
+.cr-input-wrapper--error .cr-input {
+  border-color: var(--error);
+}
+.cr-input-wrapper--error .cr-input:focus {
+  box-shadow: 0 0 0 3px var(--error-light);
+}
+
+.cr-input__error { font-size: 0.75rem; color: var(--error); }
+.cr-input__hint  { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── Card Component ── */
+.cr-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.cr-card--soft {
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+
+.cr-card--dark {
+  background: var(--surface-dark);
+  color: var(--text-on-dark);
+  border-color: var(--border-dark);
+}
+
+.cr-card--outline {
+  background: transparent;
+  box-shadow: none;
+}
+
+.cr-card--pad-sm { padding: var(--space-3); }
+.cr-card--pad-md { padding: var(--space-5); }
+.cr-card--pad-lg { padding: var(--space-8); }
+
+.cr-card--hover:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.cr-card--clickable { cursor: pointer; }
+
+.cr-card__header {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cr-card__body {
+  padding: var(--space-5);
+}
+
+.cr-card__footer {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* ── Badge Component ── */
+.cr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.cr-badge--sm { font-size: 0.625rem; padding: 1px 6px; }
+.cr-badge--md { font-size: 0.6875rem; padding: 2px 8px; }
+.cr-badge--lg { font-size: 0.75rem; padding: 3px 10px; }
+
+.cr-badge--primary  { background: var(--primary-light); color: var(--primary); border-color: rgba(99, 91, 255, 0.15); }
+.cr-badge--violet   { background: var(--violet-light); color: var(--violet); border-color: rgba(124, 58, 237, 0.15); }
+.cr-badge--success  { background: var(--success-light); color: var(--success); border-color: rgba(22, 163, 74, 0.15); }
+.cr-badge--warning  { background: var(--warning-light); color: var(--warning); border-color: rgba(217, 119, 6, 0.15); }
+.cr-badge--error    { background: var(--error-light); color: var(--error); border-color: rgba(220, 38, 38, 0.15); }
+.cr-badge--info     { background: var(--info-light); color: var(--info); border-color: rgba(37, 99, 235, 0.15); }
+.cr-badge--neutral  { background: rgba(0,0,0,0.04); color: var(--text-secondary); border-color: var(--border); }
+
+.cr-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* ── Skeleton Component ── */
+.cr-skeleton {
+  display: block;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

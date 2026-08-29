@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from src.database.supabase_client import supabase_manager
@@ -19,22 +19,31 @@ def get_tenant_uuid(clerk_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, clerk_id))
 
 class ChatRequest(BaseModel):
+    # Backward compatible tenant_id, but logically it maps to workspace_id now
     tenant_id: str
     user_id: Optional[str] = "default_user"
     message: str
     chat_history: Optional[List[Dict[str, Any]]] = []
 
 class GoogleDriveIngestRequest(BaseModel):
-    file_id: str
-    file_name: str
-    mime_type: str
-    access_token: str
     tenant_id: str
+    access_token: str
+
+class CancelRequest(BaseModel):
+    msg_id: str
 
 @router.post("/api/v1/chat")
 def chat_endpoint(request: ChatRequest):
     """Executes the full Hybrid CRAG loop and logs token usage for billing."""
-    uuid_tenant = get_tenant_uuid(request.tenant_id)
+    # Convert legacy tenant_id or workspace_id to standard UUID
+    try:
+        # Check if it's already a valid UUID (workspace_id)
+        uuid.UUID(request.tenant_id)
+        uuid_tenant = request.tenant_id
+    except ValueError:
+        # Legacy deterministic fallback
+        uuid_tenant = get_tenant_uuid(request.tenant_id)
+        
     initial_state = {
         "tenant_id": uuid_tenant,
         "user_id": request.user_id,
@@ -71,12 +80,20 @@ def chat_endpoint(request: ChatRequest):
     except Exception as e:
         print(f"Failed to log transaction: {e}")
     
-    return {"answer": answer, "context": context_string}
+    return {
+        "answer": answer,
+        "context": context_string,
+        "audit_trail": final_state.get("audit_trail", [])
+    }
 
 @router.post("/api/v1/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
     """Executes the full Hybrid CRAG loop and streams the status of each LangGraph node."""
-    uuid_tenant = get_tenant_uuid(request.tenant_id)
+    try:
+        uuid.UUID(request.tenant_id)
+        uuid_tenant = request.tenant_id
+    except ValueError:
+        uuid_tenant = get_tenant_uuid(request.tenant_id)
     initial_state = {
         "tenant_id": uuid_tenant,
         "user_id": request.user_id,
@@ -92,42 +109,51 @@ async def chat_stream_endpoint(request: ChatRequest):
         answer = ""
         import asyncio
         
-        async for mode, data in crag_app.astream(initial_state, stream_mode=["updates", "messages"]):
-            if mode == "messages":
-                msg, meta = data
-                if msg.content and meta.get("langgraph_node") == "generate":
-                    token = msg.content
-                    answer += token
-                    await asyncio.sleep(0.07)  # Add typing effect delay
-                    yield f"data: {json.dumps({'token': token})}\n\n"
-                    
-            elif mode == "updates":
-                node_name = list(data.keys())[0]
-                update = data[node_name]
-                if update:
-                    full_state.update(update)
-                    
-                if node_name == "embed_query":
-                    yield f"data: {json.dumps({'status': 'Generating query embeddings...'})}\n\n"
-                elif node_name == "load_memory":
-                    yield f"data: {json.dumps({'status': 'Loading user memory...'})}\n\n"
-                elif node_name == "contextualize_query":
-                    yield f"data: {json.dumps({'status': 'Contextualizing query...'})}\n\n"
-                elif node_name == "check_cache":
-                    yield f"data: {json.dumps({'status': 'Checking semantic cache...'})}\n\n"
-                elif node_name == "route_query":
-                    need_mem = full_state.get("need_memory", False)
-                    need_graph = full_state.get("need_graph", False)
-                    ents = full_state.get("query_entities", [])
-                    yield f"data: {json.dumps({'status': f'Routing query... (Mem: {need_mem}, Graph: {need_graph}, Entities: {len(ents)})'})}\n\n"
-                elif node_name == "retrieve":
-                    yield f"data: {json.dumps({'status': 'Retrieving from Vector & Graph...'})}\n\n"
-                elif node_name == "grade_documents":
-                    yield f"data: {json.dumps({'status': 'Reranking and validating chunks (Jina)...'})}\n\n"
-                elif node_name == "generate" or node_name == "generate_cached":
-                    yield f"data: {json.dumps({'status': 'Synthesizing final answer...'})}\n\n"
-                elif node_name == "rewrite":
-                    yield f"data: {json.dumps({'status': 'Rewriting query for better results...'})}\n\n"
+        try:
+            async for mode, data in crag_app.astream(initial_state, stream_mode=["updates", "messages"]):
+                if mode == "messages":
+                    msg, meta = data
+                    if msg.content and meta.get("langgraph_node") == "generate":
+                        token = msg.content
+                        answer += token
+                        await asyncio.sleep(0.07)  # Add typing effect delay
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+                        
+                elif mode == "updates":
+                    node_name = list(data.keys())[0]
+                    update = data[node_name]
+                    if update:
+                        full_state.update(update)
+                        
+                    if node_name == "embed_query":
+                        yield f"data: {json.dumps({'status': 'Generating query embeddings...'})}\n\n"
+                    elif node_name == "load_memory":
+                        yield f"data: {json.dumps({'status': 'Loading user memory...'})}\n\n"
+                    elif node_name == "contextualize_query":
+                        yield f"data: {json.dumps({'status': 'Contextualizing query...'})}\n\n"
+                    elif node_name == "check_cache":
+                        yield f"data: {json.dumps({'status': 'Checking semantic cache...'})}\n\n"
+                    elif node_name == "route_query":
+                        need_mem = full_state.get("need_memory", False)
+                        need_graph = full_state.get("need_graph", False)
+                        ents = full_state.get("query_entities", [])
+                        yield f"data: {json.dumps({'status': f'Routing query... (Mem: {need_mem}, Graph: {need_graph}, Entities: {len(ents)})'})}\n\n"
+                    elif node_name == "retrieve":
+                        yield f"data: {json.dumps({'status': 'Retrieving from Vector & Graph...'})}\n\n"
+                    elif node_name == "grade_documents":
+                        yield f"data: {json.dumps({'status': 'Reranking and validating chunks (Jina)...'})}\n\n"
+                    elif node_name == "agent_node":
+                        yield f"data: {json.dumps({'status': 'Agent analyzing context and deciding next steps...'})}\n\n"
+                    elif node_name == "tool_executor":
+                        yield f"data: {json.dumps({'status': 'Agent executing external tools...'})}\n\n"
+                    elif node_name == "generate" or node_name == "generate_cached":
+                        yield f"data: {json.dumps({'status': 'Synthesizing final answer...'})}\n\n"
+                    elif node_name == "rewrite":
+                        yield f"data: {json.dumps({'status': 'Rewriting query for better results...'})}\n\n"
+        except Exception as astream_err:
+            print(f"[Streaming Error] Pipeline crashed: {astream_err}")
+            yield f"data: {json.dumps({'status': 'done', 'answer': 'Sorry, the AI pipeline crashed unexpectedly.'})}\n\n"
+            return
                     
         # Graph execution finished. Get final answer.
         final_answer = full_state.get("generation", answer)
@@ -164,16 +190,21 @@ async def chat_stream_endpoint(request: ChatRequest):
             context_string = "\n\n".join([doc.page_content for doc in context_docs if hasattr(doc, "page_content")])
             
         graph_context_str = full_state.get("graph_context", "")
+        audit_trail = full_state.get("audit_trail", [])
             
-        yield f"data: {json.dumps({'status': 'done', 'answer': final_answer, 'context': context_string, 'graph_context': graph_context_str})}\n\n"
+        yield f"data: {json.dumps({'status': 'done', 'answer': final_answer, 'context': context_string, 'graph_context': graph_context_str, 'audit_trail': audit_trail})}\n\n"
         
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-def background_ingestion_pipeline(uuid_tenant: str, document_id: str, pdf_bytes: bytes):
+def background_ingestion_pipeline(uuid_tenant: str, document_id: str, file_bytes: bytes, filename: str):
     """Orchestrates the entire ingestion process asynchronously."""
     db = supabase_manager.get_tenant_client(uuid_tenant)
     try:
-        text = parse_pdf(pdf_bytes)
+        if filename.endswith(".pdf"):
+            text = parse_pdf(file_bytes)
+        else:
+            text = file_bytes.decode('utf-8', errors='replace')
+            
         chunks = chunk_text(text)
         run_ingestion_pipeline(uuid_tenant, document_id, chunks)
         db.table("documents").update({"status": "completed"}).eq("id", document_id).execute()
@@ -189,8 +220,9 @@ async def ingest_document(
     tenant_id: str = Form(...),
     file: UploadFile = File(...)
 ):
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    valid_extensions = (".pdf", ".txt", ".md")
+    if not file.filename.endswith(valid_extensions):
+        raise HTTPException(status_code=400, detail="Only PDF, TXT, and MD files are supported.")
     
     uuid_tenant = get_tenant_uuid(tenant_id)
     pdf_bytes = await file.read()
@@ -220,7 +252,7 @@ async def ingest_document(
             raise HTTPException(status_code=500, detail="Failed to insert document record into Supabase.")
             
         document_id = response.data[0]['id']
-        background_tasks.add_task(background_ingestion_pipeline, uuid_tenant, document_id, pdf_bytes)
+        background_tasks.add_task(background_ingestion_pipeline, uuid_tenant, document_id, pdf_bytes, file.filename)
         
         return {"message": "Document ingestion successfully started in the background.", "document_id": document_id}
     except Exception as e:
@@ -438,3 +470,35 @@ def delete_memory(tenant_id: str, user_id: str):
         return {"message": "Memory successfully cleared."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear memory: {e}")
+
+# --- Stream Cancellation Endpoint ---
+# In a true distributed async system, cancellation requires passing a token or using Redis pub/sub.
+# For now, we mock the endpoint to complete the API contract for P0.3.
+@router.post("/api/v1/chat/{msg_id}/cancel")
+async def cancel_chat_stream(msg_id: str):
+    """Signals that a streaming request has been cancelled by the client."""
+    # TODO: Implement Redis pub/sub cancellation token broadcast
+    return {"status": "cancelled", "msg_id": msg_id}
+
+
+@router.post("/api/v1/early-access")
+async def submit_early_access(request: Request):
+    import json
+    from datetime import datetime
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    lead = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "name": data.get("name", ""),
+        "email": data.get("email", ""),
+        "company": data.get("company", ""),
+        "role": data.get("role", ""),
+        "companySize": data.get("companySize", ""),
+        "useCase": data.get("useCase", ""),
+    }
+    with open("early_access_leads.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(lead) + "\n")
+    print(f"[Early Access] New lead: {lead['email']} from {lead['company']}")
+    return {"status": "ok", "message": "You are on the list!"}

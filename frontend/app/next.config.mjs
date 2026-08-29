@@ -1,10 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8000/:path*', // Proxy to Uvicorn FastAPI Backend
+        destination: process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL}/:path*` : 'http://localhost:8000/:path*',
       },
     ]
   },

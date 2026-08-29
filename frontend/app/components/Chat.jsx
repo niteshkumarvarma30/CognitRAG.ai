@@ -1,8 +1,10 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Send, Database, Bot, User, Brain, RefreshCw, Server, Zap, Network } from 'lucide-react';
-import { UserButton, useUser } from '@clerk/nextjs';
-import MemoryManager from './MemoryManager';
+import { Send, Terminal, Loader2, Database, Brain, Sparkles, BookOpen } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
+import { Button, Input, Card, Badge, Skeleton } from '@/components/ui';
+import SourceReceipt from './SourceReceipt';
+import ConfidenceBreakdown from './ConfidenceBreakdown';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -12,31 +14,12 @@ export default function Chat({ tenantId }) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [workflowStatus, setWorkflowStatus] = useState('');
-  const [graphContext, setGraphContext] = useState('');
-  const [showMemoryManager, setShowMemoryManager] = useState(false);
+  const [activeSource, setActiveSource] = useState(null);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, workflowStatus]);
-
-  const handleResetMemory = async () => {
-    if (!window.confirm("Are you sure you want to clear your conversation memory? This will delete all facts, context, and graph relationships learned about you.")) return;
-    
-    setIsLoading(true);
-    setWorkflowStatus('Clearing Long-Term Memory...');
-    try {
-        await fetch(`${API_BASE}/memory/${tenantId}/${user.id}`, {
-            method: 'DELETE'
-        });
-        setMessages([]);
-    } catch (e) {
-        console.error("Failed to reset memory", e);
-    } finally {
-        setIsLoading(false);
-        setWorkflowStatus('');
-    }
-  };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -56,16 +39,20 @@ export default function Chat({ tenantId }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenant_id: tenantId,
-          user_id: user.id, // Clerk User ID
+          user_id: user?.id || 'default_user',
           message: userMessage.content,
           chat_history: currentChatHistory
         })
       });
 
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
-      
       let done = false;
+      
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
@@ -81,13 +68,20 @@ export default function Chat({ tenantId }) {
                   setMessages(prev => {
                       const newMsgs = [...prev];
                       if (newMsgs.length > 0 && newMsgs[newMsgs.length - 1].isStreaming) {
-                          newMsgs[newMsgs.length - 1] = { role: 'assistant', content: data.answer, context: data.context };
+                          newMsgs[newMsgs.length - 1] = { 
+                            role: 'assistant', 
+                            content: data.answer, 
+                            audit_trail: data.audit_trail || []
+                          };
                       } else {
-                          newMsgs.push({ role: 'assistant', content: data.answer, context: data.context });
+                          newMsgs.push({ 
+                            role: 'assistant', 
+                            content: data.answer, 
+                            audit_trail: data.audit_trail || []
+                          });
                       }
                       return newMsgs;
                   });
-                  setGraphContext(data.graph_context || '');
                   setWorkflowStatus('');
                 } else if (data.token !== undefined) {
                   setMessages(prev => {
@@ -117,188 +111,171 @@ export default function Chat({ tenantId }) {
       setWorkflowStatus('');
     } finally {
       setIsLoading(false);
+      setWorkflowStatus('');
     }
   };
 
+  const getConfidenceLevel = (audit_trail) => {
+    if (!audit_trail || audit_trail.length === 0) return 'low';
+    if (audit_trail.length > 3) return 'high';
+    return 'moderate';
+  };
+
   return (
-    <div style={{ display: 'flex', gap: '1.5rem', width: '100%', height: '100%', maxWidth: '1600px', margin: '0 auto', overflow: 'hidden' }}>
-      <div className="glass-panel" style={{ flex: '1', display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden', border: '1px solid var(--border-light)' }}>
-      
-      {/* PREMIUM HEADER */}
-      <header style={{ padding: '1.5rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, rgba(15,23,42,0.6), rgba(15,23,42,0.2))' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2))', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 0 20px rgba(59,130,246,0.2)' }}>
-            <Brain size={24} style={{ color: 'var(--accent)' }} />
-          </div>
-          <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>CognitRAG.ai Assistant</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }}></div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '0.02em' }}>Tenant Space: {tenantId}</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            <Server size={14} style={{ color: '#60a5fa' }} />
-            <span>Isolated Environment</span>
-          </div>
-
-          <div style={{ height: '24px', width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
-
-          <button 
-            onClick={() => setShowMemoryManager(true)}
-            style={{ 
-                background: 'rgba(139, 92, 246, 0.1)', 
-                color: '#a78bfa', 
-                border: '1px solid rgba(139, 92, 246, 0.3)', 
-                padding: '0.6rem 1rem', 
-                borderRadius: '8px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '0.5rem',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                transition: 'all 0.2s'
-            }}
-            title="Manage Long-Term Memory"
-          >
-            <Database size={16} />
-            <span>Manage Context</span>
-          </button>
-
-          <button 
-            onClick={handleResetMemory}
-            disabled={isLoading}
-            style={{ 
-                background: 'rgba(239, 68, 68, 0.1)', 
-                color: '#f87171', 
-                border: '1px solid rgba(239, 68, 68, 0.3)', 
-                padding: '0.6rem 1rem', 
-                borderRadius: '8px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '0.5rem',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                transition: 'all 0.2s'
-            }}
-            title="Clear Long-Term Memory & Chat"
-          >
-            <RefreshCw size={16} />
-            <span>Wipe Memory</span>
-          </button>
-        </div>
-      </header>
-
-      <div className="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
-        {messages.length === 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.8 }}>
-            <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', border: '1px solid rgba(59,130,246,0.2)' }}>
-              <Bot size={40} style={{ color: 'var(--accent)' }} />
-            </div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>How can I help you today?</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '1rem', maxWidth: '400px', textAlign: 'center' }}>Send a message to instantly retrieve information from your organization's connected memory graph.</p>
-          </div>
-        )}
+    <div style={{ display: 'flex', gap: 'var(--space-6)', width: '100%', height: '100%', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ flex: '1', display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
         
-        {messages.map((msg, i) => (
-          <div key={i} className={`message ${msg.role}`}>
-            <div className={`avatar ${msg.role}`}>
-              {msg.role === 'user' ? <User size={20} color="white" /> : <Bot size={20} color="white" />}
+        {/* Header */}
+        <header style={{ 
+          padding: 'var(--space-5)', borderBottom: '1px solid var(--border)', 
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+          background: 'var(--surface-soft)', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0' 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <div style={{ 
+              width: 40, height: 40, borderRadius: 'var(--radius-md)', 
+              background: 'var(--primary-light)', color: 'var(--primary)', 
+              display: 'flex', justifyContent: 'center', alignItems: 'center' 
+            }}>
+              <Brain size={20} />
             </div>
-            <div className="message-bubble">
-              {msg.content.split('\n').map((line, j) => (
-                <p key={j} style={{ minHeight: '1.2rem' }}>{line}</p>
-              ))}
-            </div>
-          </div>
-        ))}
-        
-        {isLoading && workflowStatus && (
-          <div className="message bot">
-            <div className="avatar bot"><Bot size={20} color="white" /></div>
-            <div className="message-bubble workflow-indicator">
-              <span className="workflow-spinner"></span>
-              <span className="workflow-text">{workflowStatus}</span>
+            <div>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 650, margin: 0, color: 'var(--text-primary)' }}>CognitRAG Workspace</h2>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{tenantId}</div>
             </div>
           </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+        </header>
 
-      <div style={{ padding: '1.5rem 2rem', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(15,23,42,0.4)' }}>
-        <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '1rem', position: 'relative' }}>
-          <input
-            type="text"
-            placeholder="Ask CognitRAG.ai anything... (e.g. 'What is our current data strategy?')"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={isLoading}
-            style={{
-              flex: 1,
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '24px',
-              padding: '1.25rem 1.5rem',
-              fontSize: '1rem',
-              color: 'white',
-              outline: 'none',
-              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
-            }}
-          />
-          <button 
-            type="submit" 
-            disabled={isLoading || !input.trim()}
-            style={{
-              background: 'linear-gradient(135deg, var(--accent), #2563eb)',
-              border: 'none',
-              borderRadius: '24px',
-              width: '60px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: (isLoading || !input.trim()) ? 'not-allowed' : 'pointer',
-              opacity: (isLoading || !input.trim()) ? 0.5 : 1,
-              boxShadow: '0 4px 15px rgba(59,130,246,0.4)',
-              transition: 'all 0.2s'
-            }}
-          >
-            <Send size={20} color="white" />
-          </button>
-        </form>
-      </div>
-      </div>
-
-      <div className="glass-panel" style={{ width: '400px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', border: '1px solid var(--border-light)' }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(15,23,42,0.4)' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-            <Zap size={18} style={{ color: '#8b5cf6' }} />
-            Graph Retrieval Stream
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem', margin: 0 }}>Live metadata extracted from Neo4j</p>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', fontSize: '0.875rem', color: 'var(--text-main)', background: 'rgba(2,6,23,0.5)' }}>
-          {graphContext ? (
-            graphContext.split('\n').filter(line => line.trim()).map((line, idx) => (
-              <div key={idx} style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(30,41,59,0.5)', borderRadius: '8px', borderLeft: '3px solid #8b5cf6', lineHeight: '1.5', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                {line}
-              </div>
-            ))
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.4 }}>
-              <Network size={48} style={{ margin: '0 auto 1rem', color: '#8b5cf6' }} />
-              <p style={{ textAlign: 'center', maxWidth: '200px' }}>Ask a question to watch the AI traverse the graph database in real-time.</p>
+        {/* Chat Area */}
+        <div style={{ 
+          flex: 1, padding: 'var(--space-6)', overflowY: 'auto', 
+          display: 'flex', flexDirection: 'column', gap: 'var(--space-6)',
+          background: 'var(--surface)', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)'
+        }}>
+          {messages.length === 0 && (
+            <div style={{ margin: 'auto', textAlign: 'center', maxWidth: '400px', color: 'var(--text-secondary)' }}>
+              <Sparkles size={48} style={{ color: 'var(--border)', margin: '0 auto var(--space-4)' }} />
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-2)' }}>How can I help you today?</h3>
+              <p style={{ fontSize: '0.875rem' }}>Ask me about Jira issues, GitHub architecture, Slack decisions, or Notion documents.</p>
             </div>
           )}
+
+          {messages.map((msg, i) => (
+            <div key={i} style={{ 
+              display: 'flex', 
+              flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+              alignItems: 'flex-start',
+              gap: 'var(--space-3)'
+            }}>
+              {msg.role === 'assistant' && (
+                <div style={{ 
+                  width: 32, height: 32, borderRadius: 'var(--radius-sm)', 
+                  background: 'var(--primary)', color: 'white', flexShrink: 0,
+                  display: 'flex', justifyContent: 'center', alignItems: 'center'
+                }}>
+                  <Brain size={16} />
+                </div>
+              )}
+              
+              <div style={{ 
+                maxWidth: '75%', 
+                background: msg.role === 'user' ? 'var(--primary)' : 'var(--surface-soft)', 
+                color: msg.role === 'user' ? 'white' : 'var(--text-primary)',
+                padding: 'var(--space-4)', 
+                borderRadius: 'var(--radius-lg)',
+                border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
+                boxShadow: msg.role === 'user' ? 'var(--shadow-sm)' : 'none',
+                fontSize: '0.9375rem', lineHeight: 1.6
+              }}>
+                <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--font-sans)' }}>{msg.content}</div>
+
+                {/* Assistant Output Enhancements */}
+                {msg.role === 'assistant' && msg.audit_trail && msg.audit_trail.length > 0 && !msg.isStreaming && (
+                  <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Sources & Evidence</span>
+                      <ConfidenceBreakdown 
+                        confidence={getConfidenceLevel(msg.audit_trail)} 
+                        sourcesCount={msg.audit_trail.length} 
+                      />
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                      {msg.audit_trail.map((audit, idx) => (
+                        <button 
+                          key={idx}
+                          onClick={() => setActiveSource({
+                            type: audit.type === 'vector_chunk' ? 'document' : 'jira',
+                            title: `Source Artifact #${idx + 1}`,
+                            content: audit.content,
+                            label: audit.type,
+                            relevance_score: 0.95
+                          })}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                            padding: '4px 8px', borderRadius: 'var(--radius-md)',
+                            background: 'var(--surface)', border: '1px solid var(--border)',
+                            fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg)'}
+                          onMouseOut={(e) => e.currentTarget.style.background = 'var(--surface)'}
+                        >
+                          <BookOpen size={12} />
+                          Citation {idx + 1}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {workflowStatus && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-sm)', background: 'var(--surface-soft)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--text-muted)' }}>
+                <Loader2 size={16} className="animate-spin" />
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                {workflowStatus}
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
+
+        {/* Input Area */}
+        <div style={{ 
+          padding: 'var(--space-5)', background: 'var(--surface)', 
+          border: '1px solid var(--border)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)' 
+        }}>
+          <form onSubmit={handleSendMessage} style={{ position: 'relative', display: 'flex', gap: 'var(--space-3)' }}>
+            <Input 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask anything about your company's knowledge..."
+              disabled={isLoading}
+              style={{ flex: 1, paddingRight: '3rem' }}
+            />
+            <Button 
+              type="submit" 
+              disabled={isLoading || !input.trim()}
+              style={{ position: 'absolute', right: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', padding: 'var(--space-2)' }}
+            >
+              <Send size={16} />
+            </Button>
+          </form>
+        </div>
+
       </div>
 
-      {showMemoryManager && <MemoryManager tenantId={tenantId} onClose={() => setShowMemoryManager(false)} />}
+      <SourceReceipt 
+        isOpen={!!activeSource}
+        onClose={() => setActiveSource(null)}
+        source={activeSource}
+      />
     </div>
   );
 }

@@ -23,3 +23,15 @@ class GraphState(TypedDict):
     query_entities: List[str]
     candidate_entities: List[str]
     graph_context: str
+    # Phase 1: Semantic Dictionary
+    semantic_definitions: str
+    # Phase 2: Agent Tool Calling
+    tool_calls: List[Dict[str, Any]]
+    tool_results: str
+    
+    # Phase 2.1: Multi-Agent Architecture
+    next_agent: str
+    worker_responses: Dict[str, str]
+    
+    # Phase 3: Audit Trail
+    audit_trail: List[Dict[str, Any]]

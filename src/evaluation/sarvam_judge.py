@@ -6,20 +6,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def call_sarvam_judge(prompt: str) -> int:
-    """Calls the GitHub Models API (gpt-4o) with a strict grading prompt and returns 1 or 0."""
-    api_key = os.getenv("GITHUB_TOKEN")
+    """Calls the Groq API (gpt-oss-120b) with a strict grading prompt and returns 1 or 0."""
+    api_key = os.getenv("NVIDIA_API_KEY")
     if not api_key:
-        print("No GitHub Token found")
+        print("No Nvidia Token found")
         return 0
         
-    url = "https://models.inference.ai.azure.com/chat/completions"
+    url = "https://integrate.api.nvidia.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
     payload = {
-        "model": "gpt-4o",
+        "model": "meta/llama-3.1-70b-instruct",
         "messages": [
             {"role": "system", "content": "You are a strict, impartial AI judge. Your ONLY allowed output is the single character '1' or the single character '0'. No explanations, no other text."},
             {"role": "user", "content": prompt}

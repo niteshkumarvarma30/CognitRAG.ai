@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     parent_id TEXT,
     content TEXT NOT NULL,
-    embedding VECTOR(1536), 
+    embedding VECTOR(1024), 
     entities JSONB DEFAULT '[]'::jsonb,
     graph_score FLOAT DEFAULT 0.0,
     relationship_types JSONB DEFAULT '[]'::jsonb,
@@ -39,11 +39,13 @@ ALTER TABLE document_chunks ENABLE ROW LEVEL SECURITY;
 -- Idiomatic Supabase RLS Policies using custom JWT claims
 -- This ensures that only requests carrying a JWT with the correct 'tenant_id' can access the data.
 
+DROP POLICY IF EXISTS "Tenant Isolation" ON documents;
 CREATE POLICY "Tenant Isolation" ON documents
     AS PERMISSIVE FOR ALL
     USING (tenant_id::text = (current_setting('request.jwt.claims', true)::json->>'tenant_id'))
     WITH CHECK (tenant_id::text = (current_setting('request.jwt.claims', true)::json->>'tenant_id'));
 
+DROP POLICY IF EXISTS "Tenant Isolation" ON document_chunks;
 CREATE POLICY "Tenant Isolation" ON document_chunks
     AS PERMISSIVE FOR ALL
     USING (tenant_id::text = (current_setting('request.jwt.claims', true)::json->>'tenant_id'))
@@ -53,7 +55,7 @@ CREATE POLICY "Tenant Isolation" ON document_chunks
 -- Vector Search RPC
 -- --------------------------------------------------------
 CREATE OR REPLACE FUNCTION match_document_chunks (
-  query_embedding vector(1536),
+  query_embedding vector(1024),
   match_count int,
   p_tenant_id uuid
 ) RETURNS TABLE (

@@ -13,3 +13,4 @@ instructor
 python-multipart
 mlflow
 pymupdf4llm
+stripe>=10.0.0

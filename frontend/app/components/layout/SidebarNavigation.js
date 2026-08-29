@@ -12,7 +12,8 @@ import {
   Settings,
   Terminal,
   Activity,
-  Receipt
+  Receipt,
+  Book
 } from 'lucide-react';
 import { UserButton, useUser } from '@clerk/nextjs';
 
@@ -50,6 +51,9 @@ const SidebarNavigation = () => {
         <Link href="/memory-hub" className={`nav-link ${isActive('/memory-hub')}`}>
           <Brain size={18} /> Memory Hub
         </Link>
+        <Link href="/semantic-dictionary" className={`nav-link ${isActive('/semantic-dictionary')}`}>
+          <Book size={18} /> Semantic Dictionary
+        </Link>
         <Link href="/knowledge-vault" className={`nav-link ${isActive('/knowledge-vault')}`}>
           <Database size={18} /> Knowledge Vault
         </Link>
@@ -74,12 +78,12 @@ const SidebarNavigation = () => {
         </Link>
       </div>
       
-      <div style={{ marginTop: 'auto', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+      <div style={{ marginTop: 'auto', padding: '1rem', background: 'rgba(0,0,0,0.02)', borderRadius: '20px', border: '1px solid var(--border-light)' }}>
         <div className="flex-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Status</div>
             <div className="flex-row" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }}></div>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow)' }}></div>
               <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>Memory Active</span>
             </div>
           </div>

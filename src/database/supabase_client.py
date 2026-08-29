@@ -23,9 +23,9 @@ class SupabaseManager:
         """Returns the admin client initialized with the service_role key. Bypasses RLS."""
         return self._admin_client
     
-    def get_tenant_client(self, tenant_id: str) -> Client:
+    def get_tenant_client(self, tenant_id: str, user_role: str = "viewer", user_id: str = None) -> Client:
         """
-        Creates a custom signed JWT containing the tenant_id, and attaches it to a new client.
+        Creates a custom signed JWT containing the tenant_id and user_role, and attaches it to a new client.
         This forces Postgres to apply the RLS policies in schema.sql.
         """
         if not self.jwt_secret:
@@ -34,7 +34,8 @@ class SupabaseManager:
         payload = {
             "role": "authenticated", # Must be 'authenticated' to bypass anon RLS limits
             "tenant_id": tenant_id,
-            "sub": tenant_id # This maps to auth.uid() in Postgres
+            "user_role": user_role,
+            "sub": user_id if user_id else tenant_id # maps to auth.uid() in Postgres
         }
         
         # Sign the JWT with the Supabase JWT secret

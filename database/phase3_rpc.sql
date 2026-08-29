@@ -1,11 +1,11 @@
 -- Phase 3: Hybrid Search RPC for Supabase (Cosine Similarity)
 -- Drop the conflicting functions first!
-DROP FUNCTION IF EXISTS match_document_chunks(vector(1536), integer, text);
-DROP FUNCTION IF EXISTS match_document_chunks(vector(1536), integer, uuid);
+DROP FUNCTION IF EXISTS match_document_chunks(vector(1024), integer, text);
+DROP FUNCTION IF EXISTS match_document_chunks(vector(1024), integer, uuid);
 
 -- Now create the correct one
 CREATE OR REPLACE FUNCTION match_document_chunks (
-  query_embedding vector(1536),
+  query_embedding vector(1024),
   match_count int DEFAULT 10,
   p_tenant_id uuid DEFAULT NULL
 ) RETURNS TABLE (

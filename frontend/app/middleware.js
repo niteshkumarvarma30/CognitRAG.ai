@@ -2,25 +2,31 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from 'next/server';
 
 const isProtectedRoute = createRouteMatcher([
-  '/home(.*)',
-  '/knowledge-vault(.*)',
-  '/memory-hub(.*)',
-  '/graph-explorer(.*)',
-  '/timeline(.*)',
+  '/dashboard(.*)',
+  '/ask(.*)',
+  '/knowledge(.*)',
   '/integrations(.*)',
+  '/security(.*)',
   '/settings(.*)',
-  '/brain-bills(.*)'
+  '/billing(.*)',
+  '/ai(.*)',
+  '/onboarding(.*)',
+  '/metrics(.*)',
+  '/playground(.*)',
+  // Legacy routes kept for safety
+  '/home(.*)',
+  '/memory-hub(.*)',
+  '/timeline(.*)',
+  '/brain-bills(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
     const userAuth = await auth();
-
-    // Redirect to landing page with a flag to force the frontend to clear the expired cache
     if (!userAuth.userId) {
-      const url = new URL('/', req.url);
-      url.searchParams.set('sign_out', 'true');
-      return NextResponse.redirect(url);
+      const signInUrl = new URL('/sign-in', req.url);
+      signInUrl.searchParams.set('redirect_url', req.nextUrl.pathname);
+      return NextResponse.redirect(signInUrl);
     }
   }
 });

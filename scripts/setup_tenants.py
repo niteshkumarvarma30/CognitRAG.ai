@@ -87,7 +87,7 @@ def ingest_tenant(tenant_id, name, filepath):
     }).execute()
     
     document_id = response.data[0]['id']
-    background_ingestion_pipeline(tenant_id, document_id, pdf_bytes)
+    background_ingestion_pipeline(tenant_id, document_id, pdf_bytes, filename)
     print(f"Finished ingesting {filename}")
 
 if __name__ == "__main__":
