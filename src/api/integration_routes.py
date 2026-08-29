@@ -136,14 +136,16 @@ async def github_callback(code: str, state: str):
         
     admin_db = supabase_manager.get_admin_client()
     
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    
     admin_db.table("tenants").upsert({
-        "id": tenant_id,
+        "id": uuid_tenant,
         "name": f"User {tenant_id}"
     }).execute()
     
     # Save the GitHub token
     admin_db.table("tenant_integrations").upsert({
-        "tenant_id": tenant_id,
+        "tenant_id": uuid_tenant,
         "integration_type": "github",
         "access_token": access_token,
         "workspace_name": "GitHub Account"
@@ -265,11 +267,11 @@ async def jira_callback(code: str, state: str):
 @router.get("/api/v1/integrations/google-drive/auth")
 async def gdrive_auth(tenant_id: str):
     """Redirects the user to the Google Drive OAuth approval screen."""
-    GDRIVE_CLIENT_ID = os.environ.get("GDRIVE_CLIENT_ID", "mock_client_id")
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "mock_client_id")
     REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/google-drive/callback"
     auth_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={GDRIVE_CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code"
+        f"client_id={GOOGLE_CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code"
         f"&scope=https://www.googleapis.com/auth/drive.readonly&state={tenant_id}&access_type=offline"
     )
     return RedirectResponse(auth_url)
