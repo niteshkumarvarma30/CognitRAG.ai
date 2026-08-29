@@ -15,3 +15,4 @@ stripe>=10.0.0
 litellm
 instructor
 langgraph
+google-generativeai
