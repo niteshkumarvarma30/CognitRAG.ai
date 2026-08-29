@@ -25,7 +25,7 @@ const SemanticDictionary = () => {
     try {
       setIsLoading(true);
       const token = await getToken();
-      const res = await fetch(`/api/v1/semantic/definitions?tenant_id=${user.id}`, {
+      const res = await fetch(`http://13.211.60.208:8000/api/v1/semantic/definitions?tenant_id=${user.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -48,7 +48,7 @@ const SemanticDictionary = () => {
     setErrorMsg('');
     try {
       const token = await getToken();
-      const res = await fetch(`/api/v1/semantic/definition`, {
+      const res = await fetch(`http://13.211.60.208:8000/api/v1/semantic/definition`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -83,7 +83,7 @@ const SemanticDictionary = () => {
     if (!window.confirm("Are you sure you want to delete this definition?")) return;
     try {
       const token = await getToken();
-      const res = await fetch(`/api/v1/semantic/definition/${id}?tenant_id=${user.id}`, {
+      const res = await fetch(`http://13.211.60.208:8000/api/v1/semantic/definition/${id}?tenant_id=${user.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
