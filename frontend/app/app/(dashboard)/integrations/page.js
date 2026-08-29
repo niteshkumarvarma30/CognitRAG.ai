@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
-import { MessageSquare, GitBranch, FileText, Database, ShieldAlert, Loader2, Link as LinkIcon, RefreshCw, HardDrive } from 'lucide-react';
+import { MessageSquare, GitBranch, FileText, Database, ShieldAlert, Loader2, Link as LinkIcon, RefreshCw, HardDrive, Cloud } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 export default function IntegrationsPage() {
@@ -20,7 +20,7 @@ export default function IntegrationsPage() {
   const [enterpriseModalOpen, setEnterpriseModalOpen] = useState(false);
   const [selectedEnterprise, setSelectedEnterprise] = useState('');
   
-  const connectors = [
+  const freeConnectors = [
     {
       id: 'file-upload',
       name: 'Local File Upload',
@@ -31,6 +31,19 @@ export default function IntegrationsPage() {
       status: 'disconnected',
       isEnterprise: false
     },
+    {
+      id: 'google-drive',
+      name: 'Google Drive',
+      type: 'Cloud Storage',
+      description: 'Sync Google Docs, Sheets, and PDFs directly from your corporate Google Workspace.',
+      icon: Cloud,
+      color: 'var(--info)',
+      status: 'disconnected',
+      isEnterprise: false
+    }
+  ];
+
+  const premiumConnectors = [
     {
       id: 'slack',
       name: 'Slack',
@@ -80,9 +93,16 @@ export default function IntegrationsPage() {
       return;
     }
     
-    // For File Upload, click the hidden file input
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+    if (connector.id === 'file-upload') {
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+      }
+      return;
+    }
+
+    if (connector.id === 'google-drive') {
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/integrations/google-drive/login`;
+      return;
     }
   };
 
@@ -95,10 +115,9 @@ export default function IntegrationsPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      // Hardcode tenant_id for the MVP
       formData.append('tenant_id', 'ws_1');
 
-      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/ingest, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/ingest`, {
         method: 'POST',
         body: formData,
       });
@@ -115,10 +134,74 @@ export default function IntegrationsPage() {
       setStatusMsg('error');
     } finally {
       setLoadingId(null);
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  const renderConnectorCard = (connector) => (
+    <Card key={connector.id} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ padding: 'var(--space-5)', flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
+          <div style={{ 
+            width: 48, height: 48, borderRadius: 'var(--radius-md)', 
+            background: `${connector.color}15`, color: connector.color,
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <connector.icon size={24} />
+          </div>
+          {connector.status === 'connected' ? (
+            <Badge variant="success">Connected</Badge>
+          ) : (
+            <Badge variant="secondary">Not Connected</Badge>
+          )}
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-1)' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            {connector.name}
+          </h3>
+          {connector.isEnterprise ? (
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--warning-light)', color: 'var(--warning)', textTransform: 'uppercase' }}>Premium</span>
+          ) : (
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--success-light)', color: 'var(--success)', textTransform: 'uppercase' }}>Free</span>
+          )}
+        </div>
+        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 'var(--space-3)' }}>
+          {connector.type}
+        </div>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          {connector.description}
+        </p>
+      </div>
+
+      <div style={{ 
+        padding: 'var(--space-4)', borderTop: '1px solid var(--border)', background: 'var(--surface-soft)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)'
+      }}>
+        {connector.status === 'connected' ? (
+          <>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <RefreshCw size={12} /> Sync: {connector.lastSync}
+            </div>
+            <Button variant="outline" size="sm" style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}>Configure</Button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>OAuth 2.0</div>
+            <Button 
+              variant="primary" 
+              size="sm" 
+              onClick={() => handleConnect(connector)}
+              disabled={loadingId === connector.id}
+              style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}
+            >
+              {loadingId === connector.id ? <Loader2 size={14} className="animate-spin" /> : 'Connect'}
+            </Button>
+          </>
+        )}
+      </div>
+    </Card>
+  );
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1000px' }}>
@@ -140,80 +223,38 @@ export default function IntegrationsPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
-        {/* Hidden file input */}
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          style={{ display: 'none' }} 
-          accept=".pdf,.txt,.md" 
-          onChange={handleFileUpload} 
-        />
-        
-        {connectors.map(connector => (
-          <Card key={connector.id} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ padding: 'var(--space-5)', flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
-                <div style={{ 
-                  width: 48, height: 48, borderRadius: 'var(--radius-md)', 
-                  background: `${connector.color}15`, color: connector.color,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  <connector.icon size={24} />
-                </div>
-                {connector.status === 'connected' ? (
-                  <Badge variant="success">Connected</Badge>
-                ) : (
-                  <Badge variant="secondary">Not Connected</Badge>
-                )}
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-1)' }}>
-                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {connector.name}
-                </h3>
-                {connector.isEnterprise ? (
-                  <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--warning-light)', color: 'var(--warning)', textTransform: 'uppercase' }}>Premium</span>
-                ) : (
-                  <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--success-light)', color: 'var(--success)', textTransform: 'uppercase' }}>Free</span>
-                )}
-              </div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 'var(--space-3)' }}>
-                {connector.type}
-              </div>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                {connector.description}
-              </p>
-            </div>
+      {/* Hidden file input */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        style={{ display: 'none' }} 
+        accept=".pdf,.txt,.md" 
+        onChange={handleFileUpload} 
+      />
 
-            <div style={{ 
-              padding: 'var(--space-4)', borderTop: '1px solid var(--border)', background: 'var(--surface-soft)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)'
-            }}>
-              {connector.status === 'connected' ? (
-                <>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <RefreshCw size={12} /> Sync: {connector.lastSync}
-                  </div>
-                  <Button variant="outline" size="sm" style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}>Configure</Button>
-                </>
-              ) : (
-                <>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>OAuth 2.0</div>
-                  <Button 
-                    variant="primary" 
-                    size="sm" 
-                    onClick={() => handleConnect(connector)}
-                    disabled={loadingId === connector.id}
-                    style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}
-                  >
-                    {loadingId === connector.id ? <Loader2 size={14} className="animate-spin" /> : 'Connect'}
-                  </Button>
-                </>
-              )}
-            </div>
-          </Card>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
+        
+        {/* Free Connectors Section */}
+        <div>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 650, color: 'var(--text-primary)', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+            Free Connectors
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
+            {freeConnectors.map(renderConnectorCard)}
+          </div>
+        </div>
+
+        {/* Premium Connectors Section */}
+        <div>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 650, color: 'var(--text-primary)', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            Premium Connectors
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--warning-light)', color: 'var(--warning)', textTransform: 'uppercase' }}>PRO</span>
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
+            {premiumConnectors.map(renderConnectorCard)}
+          </div>
+        </div>
+
       </div>
 
       {/* Enterprise Upgrade Modal */}
@@ -226,14 +267,14 @@ export default function IntegrationsPage() {
               </div>
             </div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 650, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 'var(--space-2)' }}>
-              Enterprise Integration
+              Premium Integration
             </h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', textAlign: 'center', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
-              The <strong>{selectedEnterprise}</strong> connector requires an Enterprise license to securely sync large volumes of organization data.
+              The <strong>{selectedEnterprise}</strong> connector requires a Premium license to securely sync organization data.
             </p>
             <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
               <Button variant="outline" style={{ flex: 1 }} onClick={() => setEnterpriseModalOpen(false)}>Cancel</Button>
-              <Button variant="primary" style={{ flex: 1 }} onClick={() => setEnterpriseModalOpen(false)}>Contact Sales</Button>
+              <Button variant="primary" style={{ flex: 1 }} onClick={() => setEnterpriseModalOpen(false)}>Upgrade Plan</Button>
             </div>
           </div>
         </div>
