@@ -78,6 +78,33 @@ graph TD
     BackgroundExec --> DistillMem["Distill Episodic Memory"]
 ```
 
+
+## Code Architecture Deep-Dive
+
+### 1. Document Ingestion Pipeline (src/ingestion/pipeline.py & 
+outes.py)
+- **Trigger:** Admin uploads a file via the /api/v1/ingest endpoint.
+- **Background Task:** FastAPI triggers ackground_ingestion_pipeline to avoid blocking the HTTP response.
+- **Parsing:** parse_pdf() uses pymupdf4llm to convert the raw PDF bytes into a clean Markdown representation. A fallback to standard itz (PyMuPDF) is used if markdown extraction fails.
+- **Cleaning:** clean_financial_text() strips XML/XBRL tags, URLs, and noisy numerical table artifacts.
+- **Chunking:** RecursiveCharacterTextSplitter generates **2000-character Parent Chunks** (for context) and **400-character Child Chunks** (for strict vector search).
+- **Embeddings:** Child chunks are grouped into batches of 50 and sent to AWS Bedrock (mazon.titan-embed-text-v2:0) via litellm to generate 1536-dimensional vector embeddings.
+- **Storage:** Vectors are pushed into Supabase pgvector (chunks table) linking back to the 	enant_id for strict RLS isolation.
+- **Graph Extraction:** A ThreadPoolExecutor (limited to max_workers=1 for memory constraints on 1GB AWS instances) runs process_parent_chunk(). This executes a Coreference Resolution prompt via Llama-3-70b (replacing pronouns like "it" with explicit nouns) and merges the extracted relationships into Neo4j using Cypher (MERGE).
+
+### 2. Retrieval & Query Pipeline (src/retrieval/nodes.py & hybrid.py)
+- **Trigger:** User sends a chat message via /api/v1/chat.
+- **LangGraph State:** The state is initialized with the question, 	enant_id, and chat_history.
+- **Contextualization:** The contextualize_query node uses gpt-4o-mini to rewrite the user's latest question into a standalone query that encompasses the entire chat history.
+- **Embedding:** get_embedding() (with an in-memory LRU Cache) vectorizes the standalone query.
+- **Routing:** The 
+oute_query node classifies the intent as Greeting, Conversational, or Technical. Technical queries proceed to retrieval.
+- **Hybrid Search:** ector_search() performs a simultaneous HNSW Vector Search (pgvector) and Keyword Search (BM25) on Supabase, then fuses the results using Reciprocal Rank Fusion (RRF).
+- **First Rerank:** grade_documents node evaluates relevance. If all documents fail, the 
+ewrite_query node (CRAG) alters the search terms and loops back to retrieval.
+- **Graph Expansion:** The graph_decision node determines if multi-hop entity reasoning is required. If yes, it executes a Cypher query on Neo4j to pull relational strings.
+- **Generation:** The generate node feeds the fused Context, Graph Strings, Long-Term Memory, and User Preferences into gpt-4o-mini. The output is streamed back to the frontend using Server-Sent Events (SSE).
+
 ### Step-by-Step Flow
 
 #### Phase 1: Document Ingestion (The Admin Pipeline)
@@ -97,6 +124,27 @@ graph TD
 8. **Context Fusion & Second Rerank (`fuse_and_rerank`):** The new graph sentences are combined with the vector chunks, and the Jina reranker runs a second time to fuse and select the most relevant mixed context pool.
 9. **Asynchronous Streaming (`generate`):** The final context (Top 15 items), preferences, and history are sent to `gpt-4o-mini`. Tokens stream instantly back to the UI via Server-Sent Events (SSE).
 10. **Background Extraction (`save_memory`):** After the response, a background thread uses `sarvam-30b` to extract new facts, dynamically connect the Neo4j `(User)` node, and distill older messages into a rolling summary.
+
+
+## Frontend UI & Dashboard Tabs
+The platform features a modern Next.js (React) frontend divided into several distinct dashboard tabs. Here is the complete breakdown of the text and functionality presented across the UI:
+
+- **/home**: Landing dashboard. _"All knowledge layers are synchronized and ready for queries."_
+- **/ai/mcp**: **Model Context Protocol (MCP)** - Manages SSE Web Transport and Standard I/O Transport for external integrations.
+- **/ask**: The primary conversational chat interface where employees interact with the RAG system using Server-Sent Events (SSE) to stream the LangGraph cognitive steps.
+- **/billing**: **Billing & Usage** - Tracks Agent Execution, Custom Workflows, and Vector Documents against the Pro Plan.
+- **/brain-bills**: **Transaction History** - Displays "Total Tokens Used" and "Estimated Cost" by tracking transactions from the database.
+- **/dashboard**: General overview of system metrics and current status.
+- **/integrations**: **Connectors** - _"Connect external tools to build your semantic knowledge graph."_ (Currently supports OAuth connections for Notion, GitHub, Slack, Jira, Google Drive).
+- **/knowledge**: **Knowledge Library** - _"Review your ingested documents and verified memories."_ Displays all uploaded PDFs and their ingestion status.
+- **/knowledge/graph**: **Graph Explorer** - _"Interactive 3D visualization of your workspace relationship intelligence."_
+- **/memory-hub**: **Memory Hub** - _"Central administration for the four pillars of Workspace Memory and Security."_ Manages established facts from documents/chat and rules/formatting preferences the AI must explicitly follow.
+- **/metrics**: **System Metrics** - _"Monitor the precision and recall of your Knowledge Graph and Vector hybrid searches."_ Analyzes LLM inference speeds, hallucination rates, and semantic alignment.
+- **/playground**: **AI Playground** - _"Interact with your Workspace Memory. Bring your own model (OpenAI, Claude, Gemini)."_
+- **/security**: **Security & Access** - _"Manage workspace members, roles, and audit logs."_ Enforces Role-Based Access Control (RBAC).
+- **/semantic-dictionary**: **Semantic Dictionary** - _"Govern your business definitions. AI Agents strictly adhere to these definitions when calculating metrics or answering questions."_
+- **/settings**: **Workspace Settings** - _"Invite colleagues, assign roles, and manage permissions... Override dynamic routing and force specific models... Configure data retention policies."_
+- **/timeline**: **Workspace Timeline** - _"Chronological evolution of the workspace: decisions, migrations, and key milestones."_
 
 ## Frontend UI & Authentication
 The platform features a modern React (Vite) frontend, split into two primary interfaces:
