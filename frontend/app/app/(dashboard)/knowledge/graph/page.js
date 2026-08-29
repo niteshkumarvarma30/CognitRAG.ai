@@ -28,7 +28,7 @@ const GraphExplorer = () => {
   useEffect(() => {
     const fetchGraph = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/v1/graph/ws_1/export`);
+        const response = await fetch(`/api/v1/graph/ws_1/export`);
         if (response.ok) {
           const data = await response.json();
           setGraphData(data);

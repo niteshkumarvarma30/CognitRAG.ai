@@ -16,7 +16,7 @@ export default function Page() {
 
   const fetchBillingData = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/billing/${user.id}`);
+      const res = await fetch(`/api/v1/billing/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setBillingData(data);

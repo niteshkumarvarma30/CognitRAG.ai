@@ -6,7 +6,7 @@ import { Button, Input, Card, Badge, Skeleton } from '@/components/ui';
 import SourceReceipt from './SourceReceipt';
 import ConfidenceBreakdown from './ConfidenceBreakdown';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = ${process.env.NEXT_PUBLIC_API_URL || 'http://13.211.60.208:8000'}/api/v1;
 
 export default function Chat({ tenantId }) {
   const { user } = useUser();

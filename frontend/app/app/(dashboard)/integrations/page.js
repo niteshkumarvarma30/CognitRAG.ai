@@ -98,7 +98,7 @@ export default function IntegrationsPage() {
       // Hardcode tenant_id for the MVP
       formData.append('tenant_id', 'ws_1');
 
-      const res = await fetch('http://localhost:8000/api/v1/ingest', {
+      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL || 'http://13.211.60.208:8000'}/api/v1/ingest, {
         method: 'POST',
         body: formData,
       });

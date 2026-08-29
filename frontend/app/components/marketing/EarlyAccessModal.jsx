@@ -19,7 +19,7 @@ export default function EarlyAccessModal({ isOpen, onClose }) {
     if (!form.name || !form.email || !form.company) return;
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/early-access', {
+      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL || 'http://13.211.60.208:8000'}/api/v1/early-access, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)

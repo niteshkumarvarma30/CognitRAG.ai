@@ -17,13 +17,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Fetch metrics
-    fetch('http://localhost:8000/api/v1/metrics/ws_1')
+    fetch(${process.env.NEXT_PUBLIC_API_URL || 'http://13.211.60.208:8000'}/api/v1/metrics/ws_1)
       .then(res => res.json())
       .then(data => setMetrics(data))
       .catch(err => console.error("Failed to fetch metrics", err));
 
     // Fetch recent documents for Activity feed
-    fetch('http://localhost:8000/api/v1/documents/ws_1')
+    fetch(${process.env.NEXT_PUBLIC_API_URL || 'http://13.211.60.208:8000'}/api/v1/documents/ws_1)
       .then(res => res.json())
       .then(data => {
         // Just take top 3 for dashboard

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { Trash2, Plus, Brain, Settings } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = ${process.env.NEXT_PUBLIC_API_URL || 'http://13.211.60.208:8000'}/api/v1;
 
 export default function MemoryManager({ tenantId, onClose }) {
   const { user } = useUser();
