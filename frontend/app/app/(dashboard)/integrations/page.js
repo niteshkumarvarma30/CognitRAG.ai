@@ -87,11 +87,12 @@ export default function IntegrationsPage() {
   ];
 
   const handleConnect = (connector) => {
-    if (connector.isEnterprise) {
-      setSelectedEnterprise(connector.name);
-      setEnterpriseModalOpen(true);
-      return;
-    }
+    // TEMPORARILY DISABLED FOR TESTING OAUTH
+    // if (connector.isEnterprise) {
+    //   setSelectedEnterprise(connector.name);
+    //   setEnterpriseModalOpen(true);
+    //   return;
+    // }
     
     if (connector.id === 'file-upload') {
       if (fileInputRef.current) {
@@ -100,10 +101,9 @@ export default function IntegrationsPage() {
       return;
     }
 
-    if (connector.id === 'google-drive') {
-      window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/integrations/google-drive/auth?tenant_id=ws_1`;
-      return;
-    }
+    // Redirect to the FastAPI auth endpoints
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    window.location.href = `${baseUrl}/api/v1/integrations/${connector.id}/auth?tenant_id=ws_1`;
   };
 
   const handleFileUpload = async (e) => {
