@@ -17,7 +17,7 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
 from litellm import completion
 
 litellm_client = OpenAI(
-    api_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+    api_key=os.environ.get("OPENAI_API_KEY", "dummy_key_to_bypass_validation"),
     base_url="https://litellm-is-handled-via-instructor.local"
 )
 
