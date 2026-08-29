@@ -278,7 +278,53 @@ async def gdrive_auth(tenant_id: str):
 
 @router.get("/api/v1/integrations/google-drive/callback")
 async def gdrive_callback(code: str, state: str):
-    """Receives the OAuth code from Google Drive."""
+    """Receives the OAuth code from Google Drive, exchanges it for a token, and saves it."""
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing code or state")
+        
+    tenant_id = state
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/google-drive/callback"
+    
+    response = requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "client_id": GOOGLE_CLIENT_ID.strip('"'),
+            "client_secret": GOOGLE_CLIENT_SECRET.strip('"'),
+            "code": code,
+            "redirect_uri": REDIRECT_URI,
+            "grant_type": "authorization_code"
+        }
+    )
+    
+    if response.status_code != 200:
+        print("Google Auth Error:", response.text)
+        return RedirectResponse(f"{FRONTEND_URL}/integrations?status=error")
+        
+    data = response.json()
+    access_token = data.get("access_token")
+    
+    if not access_token:
+        print("No access token in Google response:", data)
+        return RedirectResponse(f"{FRONTEND_URL}/integrations?status=error")
+        
+    admin_db = supabase_manager.get_admin_client()
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    
+    admin_db.table("tenants").upsert({
+        "id": uuid_tenant,
+        "name": f"User {tenant_id}"
+    }).execute()
+    
+    # Save the Google Drive token
+    admin_db.table("tenant_integrations").upsert({
+        "tenant_id": uuid_tenant,
+        "integration_type": "google_drive",
+        "access_token": access_token,
+        "workspace_name": "Google Drive"
+    }, on_conflict="tenant_id, integration_type").execute()
+    
     return RedirectResponse(f"{FRONTEND_URL}/integrations?status=success")
 
 from src.integrations.slack_crawler import SlackCrawler
