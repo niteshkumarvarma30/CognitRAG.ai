@@ -11,7 +11,7 @@ export default function KnowledgeGovernancePage() {
   // Fetch real uploaded documents from the backend
   useEffect(() => {
     if (activeTab === 'documents') {
-      fetch('http://13.211.60.208:8000/api/v1/documents/ws_1')
+      fetch(${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/documents/ws_1)
         .then(res => res.json())
         .then(data => {
           setDocuments(data);

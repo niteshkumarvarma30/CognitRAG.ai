@@ -13,12 +13,12 @@ router = APIRouter()
 
 NOTION_CLIENT_ID = os.environ.get("NOTION_CLIENT_ID")
 NOTION_CLIENT_SECRET = os.environ.get("NOTION_CLIENT_SECRET")
-REDIRECT_URI = "http://13.211.60.208:8000/api/v1/integrations/notion/callback"
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://13.211.60.208:3000")
+REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/notion/callback"
+FRONTEND_URL = os.environ.get("FRONTEND_URL", os.environ.get("FRONTEND_URL", "http://localhost:3000"))
 
 GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET")
-GITHUB_REDIRECT_URI = "http://13.211.60.208:8000/api/v1/integrations/github/callback"
+GITHUB_REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/github/callback"
 
 @router.get("/api/v1/integrations/notion/auth")
 async def notion_auth(tenant_id: str):
@@ -231,7 +231,7 @@ def ingest_github_repo(request: GithubIngestRequest, background_tasks: Backgroun
 async def slack_auth(tenant_id: str):
     """Redirects the user to the Slack OAuth approval screen."""
     SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "mock_client_id")
-    REDIRECT_URI = "http://13.211.60.208:8000/api/v1/integrations/slack/callback"
+    REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/slack/callback"
     auth_url = (
         f"https://slack.com/oauth/v2/authorize?"
         f"client_id={SLACK_CLIENT_ID}&scope=channels:history,channels:read,users:read&state={tenant_id}"
@@ -249,7 +249,7 @@ async def slack_callback(code: str, state: str):
 async def jira_auth(tenant_id: str):
     """Redirects the user to the Jira OAuth approval screen."""
     JIRA_CLIENT_ID = os.environ.get("JIRA_CLIENT_ID", "mock_client_id")
-    REDIRECT_URI = "http://13.211.60.208:8000/api/v1/integrations/jira/callback"
+    REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/jira/callback"
     auth_url = (
         f"https://auth.atlassian.com/authorize?"
         f"audience=api.atlassian.com&client_id={JIRA_CLIENT_ID}&scope=read:jira-work&redirect_uri={REDIRECT_URI}"
@@ -266,7 +266,7 @@ async def jira_callback(code: str, state: str):
 async def gdrive_auth(tenant_id: str):
     """Redirects the user to the Google Drive OAuth approval screen."""
     GDRIVE_CLIENT_ID = os.environ.get("GDRIVE_CLIENT_ID", "mock_client_id")
-    REDIRECT_URI = "http://13.211.60.208:8000/api/v1/integrations/google-drive/callback"
+    REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/google-drive/callback"
     auth_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
         f"client_id={GDRIVE_CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code"
