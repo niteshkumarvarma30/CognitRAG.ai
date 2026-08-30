@@ -16,8 +16,8 @@ class GDriveCrawler:
     def _get_gdrive_token(self) -> str:
         resp = self.admin_db.table("tenant_integrations")\
             .select("access_token")\
-            .eq("tenant_id", self.tenant_id)\
-            .eq("integration_type", "google-drive")\
+            .eq("tenant_id", self.uuid_tenant)\
+            .eq("integration_type", "google_drive")\
             .execute()
         if not resp.data:
             raise ValueError(f"No Google Drive integration found for tenant {self.tenant_id}")

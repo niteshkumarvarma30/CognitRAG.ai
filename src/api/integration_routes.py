@@ -404,3 +404,14 @@ def ingest_gdrive(request: GDriveIngestRequest, background_tasks: BackgroundTask
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Google Drive ingestion failed: {e}")
+
+@router.get("/api/v1/integrations/google-drive/files")
+def list_gdrive_files(tenant_id: str):
+    """Fetches a list of available files from Google Drive."""
+    try:
+        from src.integrations.gdrive_crawler import GDriveCrawler
+        crawler = GDriveCrawler(tenant_id)
+        files = crawler.list_files()
+        return {"files": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

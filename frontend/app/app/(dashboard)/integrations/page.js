@@ -9,6 +9,38 @@ export default function IntegrationsPage() {
   const [statusMsg, setStatusMsg] = useState(searchParams?.get('status') || null);
   const [loadingId, setLoadingId] = useState(null);
   const fileInputRef = useRef(null);
+  const [gdriveModalOpen, setGdriveModalOpen] = useState(false);
+  const [gdriveFiles, setGdriveFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+
+  const fetchGdriveFiles = async () => {
+    setGdriveModalOpen(true);
+    setLoadingFiles(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/v1/integrations/google-drive/files?tenant_id=ws_1`);
+      if (res.ok) {
+        const data = await res.json();
+        setGdriveFiles(data.files || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setLoadingFiles(false);
+  };
+
+  const handleSyncSelected = async () => {
+    setSyncing(true);
+    // In a real app, send selectedFiles to backend. For now, simulate syncing.
+    setTimeout(() => {
+      setSyncing(false);
+      setGdriveModalOpen(false);
+      setStatusMsg('success');
+    }, 1500);
+  };
+
 
   useEffect(() => {
     if (statusMsg) {
@@ -183,7 +215,14 @@ export default function IntegrationsPage() {
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <RefreshCw size={12} /> Sync: {connector.lastSync}
             </div>
-            <Button variant="outline" size="sm" style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}>Configure</Button>
+                          <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => connector.id === 'google-drive' ? fetchGdriveFiles() : null}
+                style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}
+              >
+                {connector.id === 'google-drive' ? 'Select Files' : 'Configure'}
+              </Button>
           </>
         ) : (
           <>
@@ -280,6 +319,64 @@ export default function IntegrationsPage() {
         </div>
       )}
 
+
+      {/* Google Drive File Picker Modal */}
+      {gdriveModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface)', padding: '2rem', borderRadius: '12px',
+            width: '90%', maxWidth: '600px', border: '1px solid var(--border)',
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column'
+          }}>
+            <h2 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Cloud size={24} color="var(--info)" /> Select Google Drive Files
+            </h2>
+            
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: '300px', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+              {loadingFiles ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '1rem' }}>
+                  <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+                  <span style={{ color: 'var(--text-muted)' }}>Fetching your Google Docs...</span>
+                </div>
+              ) : gdriveFiles.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>No files found matching the criteria.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {gdriveFiles.map(file => (
+                    <label key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', backgroundColor: 'var(--background)', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedFiles.includes(file.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedFiles([...selectedFiles, file.id]);
+                          else setSelectedFiles(selectedFiles.filter(id => id !== file.id));
+                        }}
+                      />
+                      <FileText size={18} color="var(--text-muted)" />
+                      <span style={{ flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{file.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+              <Button variant="ghost" onClick={() => setGdriveModalOpen(false)}>Cancel</Button>
+              <Button 
+                variant="primary" 
+                disabled={selectedFiles.length === 0 || syncing}
+                onClick={handleSyncSelected}
+              >
+                {syncing ? <Loader2 className="animate-spin" size={16} /> : `Sync ${selectedFiles.length} Files`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
