@@ -21,7 +21,9 @@ import {
   FinalCTA,
   Footer,
 } from '@/components/marketing';
+import NeuralGraphBackground from '@/components/marketing/NeuralGraphBackground';
 import EarlyAccessModal from '@/components/marketing/EarlyAccessModal';
+
 import { useAuth } from '@clerk/nextjs';
 import { useEffect } from 'react';
 
@@ -40,8 +42,10 @@ export default function LandingPage() {
   if (!isLoaded || isSignedIn) return null;
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden', background: 'var(--bg)' }}>
+    <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden', background: 'var(--bg)', position: 'relative' }}>
+      <NeuralGraphBackground />
       <GlobalNav onEarlyAccess={() => setEarlyAccessOpen(true)} />
+
       <HeroSection onEarlyAccess={() => setEarlyAccessOpen(true)} />
       <TrustStrip />
       <ProblemSection />
