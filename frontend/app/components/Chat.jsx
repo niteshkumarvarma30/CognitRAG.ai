@@ -76,8 +76,11 @@ export default function Chat({ tenantId }) {
       });
 
       if (!res.ok) {
-        throw new Error('Sarvam voice transcription failed');
+        const errText = await res.text();
+        console.error("Sarvam Voice Endpoint Error:", res.status, errText);
+        throw new Error(`Sarvam voice transcription failed (${res.status}): ${errText}`);
       }
+
 
       const data = await res.json();
       if (data.transcript) {
