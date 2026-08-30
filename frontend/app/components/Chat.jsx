@@ -6,9 +6,19 @@ import { Button, Input, Card, Badge, Skeleton } from '@/components/ui';
 import SourceReceipt from './SourceReceipt';
 import ConfidenceBreakdown from './ConfidenceBreakdown';
 
-const API_BASE = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1`;
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    // If running on remote IP or custom domain, point to port 8000 on the same host
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return `http://${host}:8000/api/v1`;
+    }
+  }
+  return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/v1`;
+};
 
 export default function Chat({ tenantId }) {
+
   const { user } = useUser();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -66,7 +76,7 @@ export default function Chat({ tenantId }) {
       const formData = new FormData();
       formData.append('file', audioBlob, 'voice_query.webm');
 
-      const res = await fetch(`${API_BASE}/voice/transcribe`, {
+      const res = await fetch(`${getApiBase()}/voice/transcribe`, {
         method: 'POST',
         body: formData
       });
@@ -101,7 +111,7 @@ export default function Chat({ tenantId }) {
     setWorkflowStatus('Connecting to CognitRAG.ai...');
 
     try {
-      const response = await fetch(`${API_BASE}/chat/stream`, {
+      const response = await fetch(`${getApiBase()}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
