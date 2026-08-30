@@ -198,7 +198,21 @@ export default function AppShell({ children }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', overflow: 'hidden' }}>
             <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }} />
             <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user?.fullName || 'User'}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user?.fullName || 'User'}</span>
+                <span style={{ 
+                  fontSize: '0.65rem', 
+                  fontWeight: 700, 
+                  textTransform: 'uppercase', 
+                  background: activeWorkspace?.role === 'admin' ? 'var(--primary-light)' : 'var(--surface-soft)', 
+                  color: activeWorkspace?.role === 'admin' ? 'var(--primary)' : 'var(--text-secondary)', 
+                  padding: '1px 6px', 
+                  borderRadius: 'var(--radius-pill)', 
+                  border: '1px solid var(--border)' 
+                }}>
+                  {activeWorkspace?.role || 'Admin'}
+                </span>
+              </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user?.primaryEmailAddress?.emailAddress}</div>
             </div>
           </div>
@@ -213,6 +227,7 @@ export default function AppShell({ children }) {
             </button>
           </SignOutButton>
         </div>
+
       </aside>
 
       {/* Main Content Area */}
