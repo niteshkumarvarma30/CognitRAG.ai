@@ -8,11 +8,13 @@ from src.ingestion.pipeline import run_ingestion_pipeline
 from src.retrieval.graph import crag_app
 
 from fastapi.responses import StreamingResponse
+import os
 import json
 import uuid
 import requests
 
 router = APIRouter()
+
 
 def get_tenant_uuid(clerk_id: str) -> str:
     """Deterministically convert a Clerk string ID (e.g. user_2pkXY) into a valid Postgres UUID."""
@@ -552,16 +554,24 @@ async def transcribe_voice(file: UploadFile = File(...), target_language_code: O
     url = "https://api.sarvam.ai/speech-to-text-translate"
     headers = {"api-subscription-key": sarvam_key}
     
-    files = {
-        'file': (file.filename or 'audio.wav', audio_bytes, file.content_type or 'audio/wav')
-    }
-    
-    data = {
-        'model': 'saaras:v3',
-        'prompt': 'Translate and transcribe spoken Indic language into clean English text.'
-    }
-    
     try:
+        filename = file.filename or 'audio.wav'
+        # Default content type if missing
+        content_type = file.content_type or 'audio/wav'
+        if 'webm' in filename.lower() or 'webm' in content_type.lower():
+            content_type = 'audio/webm'
+        elif 'wav' in filename.lower():
+            content_type = 'audio/wav'
+
+        files = {
+            'file': (filename, audio_bytes, content_type)
+        }
+        
+        data = {
+            'model': 'saaras:v3',
+            'prompt': 'Translate and transcribe spoken Indic language into clean English text.'
+        }
+
         resp = requests.post(url, headers=headers, files=files, data=data, timeout=30)
         if resp.status_code == 200:
             res_json = resp.json()
@@ -573,7 +583,8 @@ async def transcribe_voice(file: UploadFile = File(...), target_language_code: O
                 "status": "success"
             }
         else:
-            # Fallback to standard speech-to-text if translation endpoint differs
+            print(f"[Sarvam STT Translate Error] Status: {resp.status_code}, Body: {resp.text}")
+            # Fallback to standard speech-to-text
             fallback_url = "https://api.sarvam.ai/speech-to-text"
             fb_resp = requests.post(fallback_url, headers=headers, files=files, data={'model': 'saarika:v2.5'}, timeout=30)
             if fb_resp.status_code == 200:
@@ -583,11 +594,21 @@ async def transcribe_voice(file: UploadFile = File(...), target_language_code: O
                     "detected_language": fb_json.get("language_code", "unknown"),
                     "status": "success"
                 }
-
-            print(f"Sarvam STT failed: {resp.text}")
-            raise HTTPException(status_code=resp.status_code, detail=f"Sarvam Voice API failed: {resp.text}")
+            print(f"[Sarvam Fallback Error] Status: {fb_resp.status_code}, Body: {fb_resp.text}")
+            return {
+                "transcript": "",
+                "detected_language": "unknown",
+                "status": "partial",
+                "message": "No clear speech detected. Please speak louder."
+            }
     except Exception as e:
         print(f"Voice Transcription Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "transcript": "",
+            "detected_language": "unknown",
+            "status": "error",
+            "message": str(e)
+        }
+
 
 
