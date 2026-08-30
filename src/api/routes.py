@@ -557,8 +557,8 @@ async def transcribe_voice(file: UploadFile = File(...), target_language_code: O
     }
     
     data = {
-        'model': 'saaras:v2',
-        'prompt': 'Translate and transcribe spoken language accurately into English.'
+        'model': 'saaras:v3',
+        'prompt': 'Translate and transcribe spoken Indic language into clean English text.'
     }
     
     try:
@@ -575,7 +575,7 @@ async def transcribe_voice(file: UploadFile = File(...), target_language_code: O
         else:
             # Fallback to standard speech-to-text if translation endpoint differs
             fallback_url = "https://api.sarvam.ai/speech-to-text"
-            fb_resp = requests.post(fallback_url, headers=headers, files=files, data={'model': 'saaras:v1'}, timeout=30)
+            fb_resp = requests.post(fallback_url, headers=headers, files=files, data={'model': 'saarika:v2.5'}, timeout=30)
             if fb_resp.status_code == 200:
                 fb_json = fb_resp.json()
                 return {
@@ -583,6 +583,7 @@ async def transcribe_voice(file: UploadFile = File(...), target_language_code: O
                     "detected_language": fb_json.get("language_code", "unknown"),
                     "status": "success"
                 }
+
             print(f"Sarvam STT failed: {resp.text}")
             raise HTTPException(status_code=resp.status_code, detail=f"Sarvam Voice API failed: {resp.text}")
     except Exception as e:
