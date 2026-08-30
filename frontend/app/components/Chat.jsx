@@ -7,17 +7,11 @@ import SourceReceipt from './SourceReceipt';
 import ConfidenceBreakdown from './ConfidenceBreakdown';
 
 const getApiBase = () => {
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    // If running on remote IP or custom domain, point to port 8000 on the same host
-    if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      return `http://${host}:8000/api/v1`;
-    }
-  }
-  return `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/v1`;
+  return '/api/v1';
 };
 
 export default function Chat({ tenantId }) {
+
 
   const { user } = useUser();
   const [messages, setMessages] = useState([]);
