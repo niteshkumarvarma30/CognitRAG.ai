@@ -138,48 +138,51 @@ export default function AppShell({ children }) {
               <button 
                 onClick={() => router.push('/onboarding')}
                 style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                  padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                  background: 'transparent', border: 'none', color: 'var(--text-secondary)'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-                onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-              >
-                <Plus size={14} />
-                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Create Workspace</span>
-              </button>
             </div>
           )}
         </div>
 
         {/* Navigation Links */}
-        <nav style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)' }}>
-          {navGroups.map((group, i) => (
-            <div key={i} style={{ marginBottom: 'var(--space-6)' }}>
+        <nav style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4) var(--space-3)' }}>
+          {navGroups.map((group, groupIdx) => (
+            <div key={groupIdx} style={{ marginBottom: 'var(--space-6)' }}>
               <div style={{ 
-                fontSize: '0.75rem', fontWeight: 650, color: 'var(--text-muted)', 
-                textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 'var(--space-2)',
-                paddingLeft: 'var(--space-2)'
+                fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-muted)', 
+                textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0 var(--space-3) var(--space-2)' 
               }}>
                 {group.title}
               </div>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {group.links.map(link => {
-                  // Basic active matching logic
-                  const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname?.startsWith(link.href));
+                {group.links.map((link) => {
                   const Icon = link.icon;
+                  const isActive = pathname === link.href;
                   return (
-                    <li key={link.name}>
-                      <Link href={link.href} style={{
-                        display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                        padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                        textDecoration: 'none', color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
-                        background: isActive ? 'var(--primary-light)' : 'transparent',
-                        fontWeight: isActive ? 600 : 500, fontSize: '0.875rem',
-                        transition: 'all 150ms ease'
-                      }}>
+                    <li key={link.href}>
+                      <Link 
+                        href={link.href}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                          padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+                          fontSize: '0.875rem', fontWeight: isActive ? 600 : 500,
+                          color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
+                          background: isActive ? 'var(--primary-light)' : 'transparent',
+                          textDecoration: 'none', transition: 'all 0.15s ease'
+                        }}
+                        onMouseOver={(e) => {
+                          if (!isActive) {
+                            e.currentTarget.style.background = 'var(--surface-soft)';
+                            e.currentTarget.style.color = 'var(--text-primary)';
+                          }
+                        }}
+                        onMouseOut={(e) => {
+                          if (!isActive) {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = 'var(--text-secondary)';
+                          }
+                        }}
+                      >
                         <Icon size={18} style={{ color: isActive ? 'var(--primary)' : 'var(--text-muted)' }} />
-                        {link.name}
+                        <span>{link.name}</span>
                       </Link>
                     </li>
                   );
@@ -191,29 +194,34 @@ export default function AppShell({ children }) {
 
         {/* User Footer */}
         <div style={{ 
-          padding: 'var(--space-4)', borderTop: '1px solid var(--border)', 
+          padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--border)', 
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'var(--surface)'
+          background: 'var(--surface)', gap: '8px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', overflow: 'hidden' }}>
-            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }} />
-            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user?.fullName || 'User'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 650, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.fullName || 'User'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                 <span style={{ 
-                  fontSize: '0.65rem', 
+                  fontSize: '0.625rem', 
                   fontWeight: 700, 
+                  letterSpacing: '0.04em',
                   textTransform: 'uppercase', 
-                  background: activeWorkspace?.role === 'admin' ? 'var(--primary-light)' : 'var(--surface-soft)', 
-                  color: activeWorkspace?.role === 'admin' ? 'var(--primary)' : 'var(--text-secondary)', 
+                  background: activeWorkspace?.role === 'admin' ? '#eef2ff' : 'var(--surface-soft)', 
+                  color: activeWorkspace?.role === 'admin' ? '#4f46e5' : 'var(--text-secondary)', 
                   padding: '1px 6px', 
-                  borderRadius: 'var(--radius-pill)', 
-                  border: '1px solid var(--border)' 
+                  borderRadius: '4px', 
+                  border: '1px solid ' + (activeWorkspace?.role === 'admin' ? '#c7d2fe' : 'var(--border)')
                 }}>
                   {activeWorkspace?.role || 'Admin'}
                 </span>
+                <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user?.primaryEmailAddress?.emailAddress}
+                </span>
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user?.primaryEmailAddress?.emailAddress}</div>
             </div>
           </div>
           
@@ -221,9 +229,9 @@ export default function AppShell({ children }) {
             <button style={{
               background: 'transparent', border: 'none', color: 'var(--text-muted)',
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)'
+              padding: '6px', borderRadius: 'var(--radius-sm)', flexShrink: 0
             }} title="Sign out" onMouseOver={(e) => { e.currentTarget.style.color = 'var(--error)'; e.currentTarget.style.background = 'var(--surface-soft)' }} onMouseOut={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent' }}>
-              <LogOut size={18} />
+              <LogOut size={16} />
             </button>
           </SignOutButton>
         </div>
