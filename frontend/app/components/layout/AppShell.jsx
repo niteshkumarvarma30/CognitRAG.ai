@@ -134,13 +134,23 @@ export default function AppShell({ children }) {
                   {activeWorkspace?.id === ws.id && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)' }} />}
                 </button>
               ))}
-              <div style={{ height: '1px', background: 'var(--border)', margin: 'var(--space-1) 0' }} />
               <button 
                 onClick={() => router.push('/onboarding')}
                 style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                  padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                  background: 'transparent', border: 'none', color: 'var(--text-secondary)'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+                onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+              >
+                <Plus size={14} />
+                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Create Workspace</span>
+              </button>
             </div>
           )}
         </div>
+
 
         {/* Navigation Links */}
         <nav style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4) var(--space-3)' }}>
