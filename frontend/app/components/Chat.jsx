@@ -83,16 +83,19 @@ export default function Chat({ tenantId }) {
 
 
       const data = await res.json();
-      if (data.transcript) {
+      if (data.transcript && data.transcript.trim().length > 0) {
         setInput(data.transcript);
         sendChatMessage(data.transcript);
+      } else {
+        setWorkflowStatus(data.message || 'No clear speech detected. Please speak closer to your microphone and try again.');
       }
     } catch (err) {
       console.error("Voice error:", err);
-      setWorkflowStatus('Could not translate voice. Please type your query.');
+      setWorkflowStatus('Could not connect to voice service. Please type your query.');
     } finally {
       setIsTranscribing(false);
     }
+
   };
 
   const sendChatMessage = async (textToSend) => {
