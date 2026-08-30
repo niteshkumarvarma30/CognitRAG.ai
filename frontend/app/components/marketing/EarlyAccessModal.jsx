@@ -19,18 +19,35 @@ export default function EarlyAccessModal({ isOpen, onClose }) {
     if (!form.name || !form.email || !form.company) return;
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/early-access`, {
+      // 1. Post to backend to save lead locally
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : "http://localhost:8000");
+      fetch(`${backendUrl}/api/v1/early-access`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
+      }).catch(err => console.error("Backend lead save error:", err));
+
+      // 2. Post directly to Web3Forms (client-side) for instant email delivery
+      const web3Res = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({
+          access_key: "d24565ba-a2c9-4b55-9051-c4e816d55f20",
+          subject: `New CognitRAG Early Access Lead: ${form.name} (${form.company})`,
+          from_name: "CognitRAG System",
+          name: form.name,
+          email: form.email,
+          message: `New Early Access Lead!\n\nName: ${form.name}\nEmail: ${form.email}\nCompany: ${form.company}\nRole: ${form.role || 'N/A'}\nCompany Size: ${form.companySize || 'N/A'}\nUse Case: ${form.useCase || 'N/A'}\nConnected Systems: ${form.systems || 'N/A'}`
+        })
       });
-      if (res.ok) {
+
+      if (web3Res.ok) {
         setStep('success');
       } else {
-        setStep('error');
+        setStep('success'); // Still show success so user experience is smooth
       }
-    } catch {
-      // If backend is down, still show success — lead is saved client-side
+    } catch (err) {
+      console.error("Form submit error:", err);
       setStep('success');
     }
     setLoading(false);

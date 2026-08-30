@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
-import { MessageSquare, GitBranch, FileText, Database, ShieldAlert, Loader2, Link as LinkIcon, RefreshCw, HardDrive, Cloud } from 'lucide-react';
+import { MessageSquare, GitBranch, FileText, Database, ShieldAlert, Loader2, Link as LinkIcon, RefreshCw, HardDrive, Cloud, X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 export default function IntegrationsPage() {
@@ -20,56 +20,230 @@ export default function IntegrationsPage() {
   const [selectedRepos, setSelectedRepos] = useState([]);
   const [syncingGithub, setSyncingGithub] = useState(false);
 
-  const fetchGithubRepos = async () => {
-    setGithubModalOpen(true);
-    setLoadingRepos(true);
+  const [notionModalOpen, setNotionModalOpen] = useState(false);
+  const [notionPages, setNotionPages] = useState([]);
+  const [loadingNotion, setLoadingNotion] = useState(false);
+  const [selectedNotion, setSelectedNotion] = useState([]);
+  const [syncingNotion, setSyncingNotion] = useState(false);
+
+  const fetchNotionPages = async () => {
+    setNotionModalOpen(true);
+    setLoadingNotion(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${baseUrl}/api/v1/integrations/github/repos?tenant_id=ws_1`);
+      const url = process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`;
+      const res = await fetch(`${url}/api/v1/integrations/notion/pages?tenant_id=ws_1`);
       if (res.ok) {
         const data = await res.json();
-        setGithubRepos(data.repos || []);
+        setNotionPages(data.pages || []);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     }
-    setLoadingRepos(false);
+    setLoadingNotion(false);
+  };
+
+  const [activeConnections, setActiveConnections] = useState([]);
+
+  useEffect(() => {
+    const fetchActive = async () => {
+      try {
+        const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+        const res = await fetch(`${url}/api/v1/integrations/active?tenant_id=ws_1`);
+        if (res.ok) {
+          const data = await res.json();
+          setActiveConnections(data.active_integrations || []);
+        }
+      } catch (e) {
+        console.error("Error fetching active integrations:", e);
+      }
+    };
+    fetchActive();
+  }, []);
+
+  const [jobProgress, setJobProgress] = useState({}); // { [connectorId]: { status, progress } }
+
+  const pollJobStatus = async (jobId, connectorId, setSyncingState, setModalState) => {
+    const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${url}/api/v1/ingest/status/${jobId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setJobProgress(prev => ({ ...prev, [connectorId]: data }));
+          if (data.status === 'completed') {
+            clearInterval(interval);
+            setSyncingState(false);
+            setModalState(false);
+            setStatusMsg('success');
+          } else if (data.status === 'failed') {
+            clearInterval(interval);
+            setSyncingState(false);
+            alert(`Ingestion failed: ${data.error || 'Unknown error'}`);
+          }
+        }
+      } catch (err) {
+        console.error("Error polling job status:", err);
+      }
+    }, 1000);
   };
 
   const handleSyncGithub = async () => {
+    if (selectedRepos.length === 0) return;
     setSyncingGithub(true);
-    // In a real app, send selectedRepos to backend. For now, simulate syncing.
-    setTimeout(() => {
-      setSyncingGithub(false);
-      setGithubModalOpen(false);
-      setStatusMsg('success');
-    }, 1500);
-  };
-
-  const fetchGdriveFiles = async () => {
-    setGdriveModalOpen(true);
-    setLoadingFiles(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${baseUrl}/api/v1/integrations/google-drive/files?tenant_id=ws_1`);
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/ingest/github`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: 'ws_1', repo_names: selectedRepos })
+      });
       if (res.ok) {
         const data = await res.json();
-        setGdriveFiles(data.files || []);
+        pollJobStatus(data.job_id, 'github', setSyncingGithub, setGithubModalOpen);
+      } else {
+        setSyncingGithub(false);
+        alert("Failed to queue GitHub sync job.");
       }
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
+      setSyncingGithub(false);
     }
-    setLoadingFiles(false);
+  };
+
+  const handleSyncNotion = async () => {
+    if (selectedNotion.length === 0) return;
+    setSyncingNotion(true);
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/ingest/notion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: 'ws_1', page_ids: selectedNotion })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        pollJobStatus(data.job_id, 'notion', setSyncingNotion, setNotionModalOpen);
+      } else {
+        setSyncingNotion(false);
+        alert("Failed to queue Notion sync job.");
+      }
+    } catch (e) {
+      console.error(e);
+      setSyncingNotion(false);
+    }
   };
 
   const handleSyncSelected = async () => {
+    if (selectedFiles.length === 0) return;
     setSyncing(true);
-    // In a real app, send selectedFiles to backend. For now, simulate syncing.
-    setTimeout(() => {
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/ingest/gdrive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: 'ws_1', file_ids: selectedFiles })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        pollJobStatus(data.job_id, 'google-drive', setSyncing, setGdriveModalOpen);
+      } else {
+        setSyncing(false);
+        alert("Failed to queue Google Drive sync job.");
+      }
+    } catch (e) {
+      console.error(e);
       setSyncing(false);
-      setGdriveModalOpen(false);
-      setStatusMsg('success');
-    }, 1500);
+    }
+  };
+
+  const [slackModalOpen, setSlackModalOpen] = useState(false);
+  const [slackChannels, setSlackChannels] = useState([]);
+  const [loadingSlack, setLoadingSlack] = useState(false);
+  const [selectedSlack, setSelectedSlack] = useState([]);
+  const [syncingSlack, setSyncingSlack] = useState(false);
+
+  const [jiraModalOpen, setJiraModalOpen] = useState(false);
+  const [jiraProjects, setJiraProjects] = useState([]);
+  const [loadingJira, setLoadingJira] = useState(false);
+  const [selectedJira, setSelectedJira] = useState([]);
+  const [syncingJira, setSyncingJira] = useState(false);
+
+  const fetchSlackChannels = async () => {
+    setSlackModalOpen(true);
+    setLoadingSlack(true);
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/integrations/slack/channels?tenant_id=ws_1`);
+      if (res.ok) {
+        const data = await res.json();
+        setSlackChannels(data.channels || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingSlack(false);
+  };
+
+  const fetchJiraProjects = async () => {
+    setJiraModalOpen(true);
+    setLoadingJira(true);
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/integrations/jira/projects?tenant_id=ws_1`);
+      if (res.ok) {
+        const data = await res.json();
+        setJiraProjects(data.projects || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingJira(false);
+  };
+
+  const handleSyncSlack = async () => {
+    if (selectedSlack.length === 0) return;
+    setSyncingSlack(true);
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/ingest/slack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: 'ws_1', channel_ids: selectedSlack })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        pollJobStatus(data.job_id, 'slack', setSyncingSlack, setSlackModalOpen);
+      } else {
+        setSyncingSlack(false);
+        alert("Failed to queue Slack sync job.");
+      }
+    } catch (e) {
+      console.error(e);
+      setSyncingSlack(false);
+    }
+  };
+
+  const handleSyncJira = async () => {
+    if (selectedJira.length === 0) return;
+    setSyncingJira(true);
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/ingest/jira`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: 'ws_1', project_keys: selectedJira })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        pollJobStatus(data.job_id, 'jira', setSyncingJira, setJiraModalOpen);
+      } else {
+        setSyncingJira(false);
+        alert("Failed to queue Jira sync job.");
+      }
+    } catch (e) {
+      console.error(e);
+      setSyncingJira(false);
+    }
   };
 
 
@@ -101,7 +275,7 @@ export default function IntegrationsPage() {
       description: 'Sync Google Docs, Sheets, and PDFs directly from your corporate Google Workspace.',
       icon: Cloud,
       color: 'var(--info)',
-      status: 'connected',
+      status: 'disconnected',
       isEnterprise: false
     }
   ];
@@ -149,6 +323,30 @@ export default function IntegrationsPage() {
     }
   ];
 
+
+  const handleDisconnect = async (connector) => {
+    try {
+      setLoadingId(connector.id);
+      const url = process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`;
+      const res = await fetch(`${url}/api/v1/integrations/${connector.id}?tenant_id=ws_1`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        // Remove from active connections
+        setActiveConnections(activeConnections.filter(id => id !== connector.id));
+        setStatusMsg(''); // clear success msg if any
+      } else {
+        console.error("Failed to disconnect");
+        setStatusMsg('error');
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMsg('error');
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
   const handleConnect = (connector) => {
     // TEMPORARILY DISABLED FOR TESTING OAUTH
     // if (connector.isEnterprise) {
@@ -165,7 +363,7 @@ export default function IntegrationsPage() {
     }
 
     // Redirect to the FastAPI auth endpoints
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`;
     window.location.href = `${baseUrl}/api/v1/integrations/${connector.id}/auth?tenant_id=ws_1`;
   };
 
@@ -201,7 +399,10 @@ export default function IntegrationsPage() {
     }
   };
 
-  const renderConnectorCard = (connector) => (
+  const renderConnectorCard = (connector) => {
+    const isConnected = activeConnections.includes(connector.id);
+    const connectorStatus = isConnected ? 'connected' : connector.status;
+    return (
     <Card key={connector.id} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: 'var(--space-5)', flex: 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
@@ -212,7 +413,7 @@ export default function IntegrationsPage() {
           }}>
             <connector.icon size={24} />
           </div>
-          {connector.status === 'connected' ? (
+          {connectorStatus === 'connected' ? (
             <Badge variant="success">Connected</Badge>
           ) : (
             <Badge variant="secondary">Not Connected</Badge>
@@ -241,22 +442,42 @@ export default function IntegrationsPage() {
         padding: 'var(--space-4)', borderTop: '1px solid var(--border)', background: 'var(--surface-soft)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)'
       }}>
-        {connector.status === 'connected' ? (
+        {connectorStatus === 'connected' ? (
           <>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <RefreshCw size={12} /> Sync: {connector.lastSync}
             </div>
-                                        <Button 
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => handleDisconnect(connector)}
+                disabled={loadingId === connector.id}
+                style={{ padding: '4px 8px', height: 'auto', fontSize: '0.75rem', color: 'var(--error)' }}
+                title="Disconnect"
+              >
+                {loadingId === connector.id ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+              </Button>
+              <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
                   if (connector.id === 'google-drive') fetchGdriveFiles();
                   else if (connector.id === 'github') fetchGithubRepos();
+                  else if (connector.id === 'notion') fetchNotionPages();
+                  else if (connector.id === 'slack') fetchSlackChannels();
+                  else if (connector.id === 'jira') fetchJiraProjects();
                 }}
+                disabled={loadingId === connector.id}
                 style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}
               >
-                {connector.id === 'google-drive' ? 'Select Files' : connector.id === 'github' ? 'Select Repos' : 'Configure'}
+                {connector.id === 'google-drive' ? 'Select Files' : 
+                 connector.id === 'github' ? 'Select Repos' : 
+                 connector.id === 'notion' ? 'Select Pages' : 
+                 connector.id === 'slack' ? 'Select Channels' : 
+                 connector.id === 'jira' ? 'Select Projects' : 'Configure'}
               </Button>
+            </div>
           </>
         ) : (
           <>
@@ -274,7 +495,8 @@ export default function IntegrationsPage() {
         )}
       </div>
     </Card>
-  );
+    );
+  };
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1000px' }}>
@@ -355,6 +577,75 @@ export default function IntegrationsPage() {
 
 
       
+      
+      {/* Notion Page Picker Modal */}
+      {notionModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface)', padding: '2rem', borderRadius: '12px',
+            width: '90%', maxWidth: '600px', border: '1px solid var(--border)',
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column'
+          }}>
+            <h2 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Database size={24} color="var(--text)" /> Select Notion Pages
+            </h2>
+            
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: '300px', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+              {loadingNotion ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '1rem' }}>
+                  <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+                  <span style={{ color: 'var(--text-muted)' }}>Fetching your Notion pages...</span>
+                </div>
+              ) : notionPages.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>No pages found. Make sure you selected pages during OAuth.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {notionPages.map(page => (
+                    <label key={page.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', backgroundColor: 'var(--background)', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedNotion.includes(page.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedNotion([...selectedNotion, page.id]);
+                          else setSelectedNotion(selectedNotion.filter(id => id !== page.id));
+                        }}
+                      />
+                      <FileText size={18} color="var(--text-muted)" />
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: '500' }}>{page.name}</span>
+                        {page.url && <a href={page.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.7rem', color: 'var(--info)', textDecoration: 'none' }}>View in Notion</a>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                {syncingNotion && jobProgress['notion']?.progress && (
+                  <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{jobProgress['notion'].progress}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Button variant="ghost" disabled={syncingNotion} onClick={() => setNotionModalOpen(false)}>Cancel</Button>
+                <Button 
+                  variant="primary" 
+                  disabled={selectedNotion.length === 0 || syncingNotion}
+                  onClick={handleSyncNotion}
+                >
+                  {syncingNotion ? <><Loader2 className="animate-spin" size={16} /> Syncing...</> : `Sync ${selectedNotion.length} Pages`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* GitHub Repo Picker Modal */}
       {githubModalOpen && (
         <div style={{
@@ -385,6 +676,7 @@ export default function IntegrationsPage() {
                     <label key={repo.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', backgroundColor: 'var(--background)', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)' }}>
                       <input 
                         type="checkbox" 
+                        disabled={syncingGithub}
                         checked={selectedRepos.includes(repo.full_name)}
                         onChange={(e) => {
                           if (e.target.checked) setSelectedRepos([...selectedRepos, repo.full_name]);
@@ -402,15 +694,22 @@ export default function IntegrationsPage() {
               )}
             </div>
             
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-              <Button variant="ghost" onClick={() => setGithubModalOpen(false)}>Cancel</Button>
-              <Button 
-                variant="primary" 
-                disabled={selectedRepos.length === 0 || syncingGithub}
-                onClick={handleSyncGithub}
-              >
-                {syncingGithub ? <Loader2 className="animate-spin" size={16} /> : `Sync ${selectedRepos.length} Repos`}
-              </Button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                {syncingGithub && jobProgress['github']?.progress && (
+                  <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{jobProgress['github'].progress}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Button variant="ghost" disabled={syncingGithub} onClick={() => setGithubModalOpen(false)}>Cancel</Button>
+                <Button 
+                  variant="primary" 
+                  disabled={selectedRepos.length === 0 || syncingGithub}
+                  onClick={handleSyncGithub}
+                >
+                  {syncingGithub ? <><Loader2 className="animate-spin" size={16} /> Syncing...</> : `Sync ${selectedRepos.length} Repos`}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -446,6 +745,7 @@ export default function IntegrationsPage() {
                     <label key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', backgroundColor: 'var(--background)', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)' }}>
                       <input 
                         type="checkbox" 
+                        disabled={syncing}
                         checked={selectedFiles.includes(file.id)}
                         onChange={(e) => {
                           if (e.target.checked) setSelectedFiles([...selectedFiles, file.id]);
@@ -460,15 +760,159 @@ export default function IntegrationsPage() {
               )}
             </div>
             
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-              <Button variant="ghost" onClick={() => setGdriveModalOpen(false)}>Cancel</Button>
-              <Button 
-                variant="primary" 
-                disabled={selectedFiles.length === 0 || syncing}
-                onClick={handleSyncSelected}
-              >
-                {syncing ? <Loader2 className="animate-spin" size={16} /> : `Sync ${selectedFiles.length} Files`}
-              </Button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                {syncing && jobProgress['google-drive']?.progress && (
+                  <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{jobProgress['google-drive'].progress}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Button variant="ghost" disabled={syncing} onClick={() => setGdriveModalOpen(false)}>Cancel</Button>
+                <Button 
+                  variant="primary" 
+                  disabled={selectedFiles.length === 0 || syncing}
+                  onClick={handleSyncSelected}
+                >
+                  {syncing ? <><Loader2 className="animate-spin" size={16} /> Syncing...</> : `Sync ${selectedFiles.length} Files`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Slack Channel Picker Modal */}
+      {slackModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface)', padding: '2rem', borderRadius: '12px',
+            width: '90%', maxWidth: '600px', border: '1px solid var(--border)',
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column'
+          }}>
+            <h2 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <MessageSquare size={24} color="var(--violet)" /> Select Slack Channels
+            </h2>
+            
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: '300px', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+              {loadingSlack ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '1rem' }}>
+                  <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+                  <span style={{ color: 'var(--text-muted)' }}>Fetching your Slack channels...</span>
+                </div>
+              ) : slackChannels.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>No channels found or Slack not connected.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {slackChannels.map(ch => (
+                    <label key={ch.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', backgroundColor: 'var(--background)', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                      <input 
+                        type="checkbox" 
+                        disabled={syncingSlack}
+                        checked={selectedSlack.includes(ch.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedSlack([...selectedSlack, ch.id]);
+                          else setSelectedSlack(selectedSlack.filter(id => id !== ch.id));
+                        }}
+                      />
+                      <MessageSquare size={18} color="var(--violet)" />
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: '500' }}>{ch.name}</span>
+                        {ch.topic && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{ch.topic}</span>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                {syncingSlack && jobProgress['slack']?.progress && (
+                  <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{jobProgress['slack'].progress}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Button variant="ghost" disabled={syncingSlack} onClick={() => setSlackModalOpen(false)}>Cancel</Button>
+                <Button 
+                  variant="primary" 
+                  disabled={selectedSlack.length === 0 || syncingSlack}
+                  onClick={handleSyncSlack}
+                >
+                  {syncingSlack ? <><Loader2 className="animate-spin" size={16} /> Syncing...</> : `Sync ${selectedSlack.length} Channels`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Jira Project Picker Modal */}
+      {jiraModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface)', padding: '2rem', borderRadius: '12px',
+            width: '90%', maxWidth: '600px', border: '1px solid var(--border)',
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column'
+          }}>
+            <h2 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <FileText size={24} color="var(--info)" /> Select Jira Projects
+            </h2>
+            
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: '300px', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+              {loadingJira ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '1rem' }}>
+                  <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+                  <span style={{ color: 'var(--text-muted)' }}>Fetching your Jira projects...</span>
+                </div>
+              ) : jiraProjects.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>No projects found or Jira not connected.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {jiraProjects.map(proj => (
+                    <label key={proj.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', backgroundColor: 'var(--background)', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                      <input 
+                        type="checkbox" 
+                        disabled={syncingJira}
+                        checked={selectedJira.includes(proj.key)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedJira([...selectedJira, proj.key]);
+                          else setSelectedJira(selectedJira.filter(key => key !== proj.key));
+                        }}
+                      />
+                      <FileText size={18} color="var(--info)" />
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: '500' }}>{proj.name}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Key: {proj.key}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                {syncingJira && jobProgress['jira']?.progress && (
+                  <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{jobProgress['jira'].progress}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Button variant="ghost" disabled={syncingJira} onClick={() => setJiraModalOpen(false)}>Cancel</Button>
+                <Button 
+                  variant="primary" 
+                  disabled={selectedJira.length === 0 || syncingJira}
+                  onClick={handleSyncJira}
+                >
+                  {syncingJira ? <><Loader2 className="animate-spin" size={16} /> Syncing...</> : `Sync ${selectedJira.length} Projects`}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

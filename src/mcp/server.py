@@ -60,6 +60,78 @@ async def get_semantic_dictionary(tenant_id: str) -> str:
     except Exception as e:
         return f"Error fetching semantic dictionary: {str(e)}"
 
+@mcp.tool()
+async def ingest_document_via_mcp(title: str, content: str, tenant_id: str) -> str:
+    """
+    Ingest a new document, markdown spec, architectural note, or meeting memo directly 
+    into the company's Supabase Vector database and Neo4j Knowledge Graph.
+    
+    Args:
+        title: The name/title of the document (e.g. 'Billing_Architecture_v2.md').
+        content: The raw text/markdown body of the document.
+        tenant_id: The workspace/tenant UUID.
+    """
+    try:
+        from src.ingestion.parser import chunk_text
+        from src.ingestion.pipeline import run_ingestion_pipeline
+        from src.api.routes import get_tenant_uuid
+        
+        uuid_tenant = get_tenant_uuid(tenant_id)
+        admin_db = supabase_manager.get_admin_client()
+        
+        # Ensure tenant exists
+        admin_db.table("tenants").upsert({"id": uuid_tenant, "name": f"User {tenant_id}"}).execute()
+        db = supabase_manager.get_tenant_client(uuid_tenant)
+        
+        # 1. Insert document record into Supabase
+        doc_res = db.table("documents").insert({
+            "tenant_id": uuid_tenant,
+            "filename": f"mcp/{title}",
+            "status": "pending"
+        }).execute()
+        
+        if not doc_res.data:
+            return "Failed to create document record in Supabase."
+            
+        doc_id = doc_res.data[0]["id"]
+        
+        # 2. Chunk & run hybrid ingestion pipeline (Vectors + Neo4j Graph)
+        chunks = chunk_text(content)
+        run_ingestion_pipeline(uuid_tenant, doc_id, chunks)
+        
+        # 3. Mark completed
+        db.table("documents").update({"status": "completed"}).eq("id", doc_id).execute()
+        
+        return f"Successfully ingested document '{title}' into Supabase and Neo4j (ID: {doc_id}, {len(chunks)} chunks embedded)."
+    except Exception as e:
+        return f"Error ingesting document via MCP: {str(e)}"
+
+@mcp.tool()
+async def save_agent_memory(agent_id: str, fact_or_decision: str, tenant_id: str) -> str:
+    """
+    Saves an episodic memory or architectural decision recorded by an AI agent into 
+    the company's long-term memory hub.
+    
+    Args:
+        agent_id: Identifier of the AI agent saving the memory.
+        fact_or_decision: The key finding, decision, or memory to persist.
+        tenant_id: The workspace/tenant UUID.
+    """
+    try:
+        from src.api.routes import get_tenant_uuid
+        uuid_tenant = get_tenant_uuid(tenant_id)
+        db = supabase_manager.get_tenant_client(uuid_tenant)
+        
+        db.table("user_facts").insert({
+            "tenant_id": uuid_tenant,
+            "fact": f"[{agent_id}] {fact_or_decision}",
+            "category": "agent_memory"
+        }).execute()
+        
+        return f"Memory successfully persisted to workspace memory hub by agent '{agent_id}'."
+    except Exception as e:
+        return f"Error saving agent memory: {str(e)}"
+
 @mcp.resource("cognitrag://{tenant_id}/audit_log")
 def get_audit_log(tenant_id: str) -> str:
     """

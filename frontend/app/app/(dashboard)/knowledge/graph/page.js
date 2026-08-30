@@ -46,28 +46,42 @@ const GraphExplorer = () => {
   const isEmpty = fetchError || graphData.nodes.length === 0;
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="page-header" style={{ marginBottom: '1rem' }}>
-        <h1 className="page-title">Graph Explorer</h1>
-        <p className="page-subtitle">Interactive 3D visualization of your workspace relationship intelligence.</p>
+    <div style={{ width: '100%', maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className="page-header">
+        <h1 className="page-title" style={{ fontSize: '1.5rem', fontWeight: 650, color: 'var(--text-primary)' }}>Graph Explorer</h1>
+        <p className="page-subtitle" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>Interactive 3D visualization of your workspace relationship intelligence.</p>
       </div>
 
-      <div className="glass-panel" style={{ flex: 1, position: 'relative', borderRadius: '16px', overflow: 'hidden', minHeight: '600px' }}>
-        <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+      <div className="glass-panel" style={{ 
+        width: '100%',
+        maxWidth: '100%',
+        position: 'relative', 
+        borderRadius: '16px', 
+        overflow: 'hidden', 
+        height: 'calc(100vh - 220px)',
+        minHeight: '480px',
+        maxHeight: '600px',
+        border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-md)',
+        background: 'radial-gradient(circle at 50% 50%, #FAF5FF 0%, #F5F3FF 45%, #FFFFFF 100%)'
+      }}>
+        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
 
           {isEmpty ? (
             /* ── Empty / Error state ── */
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', gap: '16px',
-              background: '#0A0B0F', color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '32px'
+              background: 'transparent', color: 'var(--text-secondary)', textAlign: 'center', padding: '32px'
             }}>
-              <Network size={48} strokeWidth={1} style={{ opacity: 0.3 }} />
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                <Network size={32} strokeWidth={1.5} />
+              </div>
               <div>
-                <h3 style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600, marginBottom: '8px' }}>
+                <h3 style={{ color: 'var(--text-primary)', fontWeight: 650, marginBottom: '8px', fontSize: '1.125rem' }}>
                   {fetchError ? 'Knowledge Graph unavailable' : 'No knowledge graph yet'}
                 </h3>
-                <p style={{ fontSize: '0.875rem', maxWidth: '360px' }}>
+                <p style={{ fontSize: '0.875rem', maxWidth: '360px', color: 'var(--text-muted)' }}>
                   {fetchError
                     ? 'The API server is not running or has no graph data. Start the backend and ingest documents to populate your graph.'
                     : 'Ingest your first documents via the Connectors page to build your knowledge graph.'}
@@ -77,34 +91,66 @@ const GraphExplorer = () => {
           ) : (
             /* ── Live 3D Graph ── */
             <>
-              {/* Legend */}
-              <div style={{ position: 'absolute', top: '1rem', left: '1rem', zIndex: 10, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(10px)', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-main)', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Network size={16} style={{ color: 'var(--accent)' }} />
-                  Legend
+              {/* Floating Legend */}
+              <div style={{ 
+                position: 'absolute', top: '1.25rem', left: '1.25rem', zIndex: 10, 
+                background: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(16px)', 
+                padding: '1rem 1.25rem', borderRadius: '16px', 
+                border: '1px solid rgba(255, 255, 255, 0.9)', 
+                color: 'var(--text-primary)', 
+                boxShadow: '0 10px 30px rgba(99, 91, 255, 0.08)' 
+              }}>
+                <h3 style={{ fontSize: '0.9rem', marginBottom: '0.75rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+                  <Network size={16} color="var(--primary)" />
+                  Entity Relationships
                 </h3>
-                <div className="flex-col" style={{ gap: '0.75rem' }}>
-                  <div className="flex-row" style={{ gap: '0.75rem' }}><div style={{ width: '12px', height: '12px', background: '#3b82f6', borderRadius: '50%', boxShadow: '0 0 10px #3b82f6' }}></div> <span style={{ fontSize: '0.9rem' }}>Documents</span></div>
-                  <div className="flex-row" style={{ gap: '0.75rem' }}><div style={{ width: '12px', height: '12px', background: '#22c55e', borderRadius: '50%', boxShadow: '0 0 10px #22c55e' }}></div> <span style={{ fontSize: '0.9rem' }}>Entities</span></div>
-                  <div className="flex-row" style={{ gap: '0.75rem' }}><div style={{ width: '12px', height: '12px', background: '#a855f7', borderRadius: '50%', boxShadow: '0 0 10px #a855f7' }}></div> <span style={{ fontSize: '0.9rem' }}>Concepts</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                    <div style={{ width: '10px', height: '10px', background: '#635BFF', borderRadius: '50%', boxShadow: '0 0 8px rgba(99, 91, 255, 0.6)' }}></div> 
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Documents</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                    <div style={{ width: '10px', height: '10px', background: '#10B981', borderRadius: '50%', boxShadow: '0 0 8px rgba(16, 185, 129, 0.6)' }}></div> 
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Entities & Facts</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                    <div style={{ width: '10px', height: '10px', background: '#EC4899', borderRadius: '50%', boxShadow: '0 0 8px rgba(236, 72, 153, 0.6)' }}></div> 
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Concepts</span>
+                  </div>
                 </div>
+              </div>
+
+              {/* Bottom Instructions Tip */}
+              <div style={{
+                position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)',
+                zIndex: 10, background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(8px)',
+                padding: '6px 14px', borderRadius: '20px', border: '1px solid var(--border)',
+                fontSize: '0.75rem', color: 'var(--text-muted)', pointerEvents: 'none'
+              }}>
+                Left-click: Rotate • Scroll: Zoom • Right-click: Pan
               </div>
 
               <ForceGraph3D
                 graphData={graphData}
                 nodeColor={(node) => {
-                  if (node.group === "Document") return "#6366F1";
-                  if (node.group === "Entity") return "#10B981";
-                  return "#8B5CF6";
+                  if (node.group === "Document") return "#4F46E5";
+                  if (node.group === "Entity") return "#059669";
+                  return "#D946EF";
                 }}
                 nodeLabel="label"
                 linkLabel="label"
-                nodeRelSize={6}
-                linkWidth={2}
-                linkColor={() => "rgba(255, 255, 255, 0.2)"}
-                linkDirectionalArrowLength={3}
+                nodeRelSize={9}
+                nodeResolution={24}
+                nodeOpacity={0.95}
+                linkWidth={2.5}
+                linkColor={() => "rgba(79, 70, 229, 0.45)"}
+                linkDirectionalArrowLength={4.5}
                 linkDirectionalArrowRelPos={1}
-                backgroundColor="#0A0B0F"
+                linkDirectionalParticles={3}
+                linkDirectionalParticleWidth={2.5}
+                linkDirectionalParticleColor={() => "#635BFF"}
+                backgroundColor="rgba(0,0,0,0)"
+                showNavInfo={false}
                 width={dimensions.width}
                 height={dimensions.height}
                 onNodeClick={(node) => setSelectedNode(node)}
@@ -112,26 +158,32 @@ const GraphExplorer = () => {
 
               {/* Node Inspector Panel */}
               {selectedNode && (
-                <div style={{ position: 'absolute', top: '1rem', right: '1rem', width: '320px', zIndex: 10, background: 'var(--bg-panel)', backdropFilter: 'blur(10px)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-focus)', color: 'var(--text-main)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.5rem' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: '600', margin: 0, color: 'var(--accent)' }}>Node Inspector</h3>
-                    <button onClick={() => setSelectedNode(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
+                <div style={{ 
+                  position: 'absolute', top: '1.25rem', right: '1.25rem', width: '320px', zIndex: 10, 
+                  background: 'rgba(255, 255, 255, 0.92)', backdropFilter: 'blur(16px)', 
+                  padding: '1.25rem', borderRadius: '16px', 
+                  border: '1px solid var(--border)', color: 'var(--text-primary)', 
+                  boxShadow: '0 12px 36px rgba(0,0,0,0.08)' 
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: '700', margin: 0, color: 'var(--primary)' }}>Node Details</h3>
+                    <button onClick={() => setSelectedNode(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1 }}>&times;</button>
                   </div>
-                  <div className="flex-col" style={{ gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Label</span>
-                      <div style={{ fontWeight: '500', fontSize: '1rem' }}>{selectedNode.label}</div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Label</span>
+                      <div style={{ fontWeight: '600', fontSize: '1rem', color: 'var(--text-primary)' }}>{selectedNode.label}</div>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Type</span>
-                      <div style={{ fontWeight: '500', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: selectedNode.group === 'Document' ? '#6366F1' : (selectedNode.group === 'Entity' ? '#10B981' : '#8B5CF6') }}></div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Classification</span>
+                      <div style={{ fontWeight: '500', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '2px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: selectedNode.group === 'Document' ? '#635BFF' : (selectedNode.group === 'Entity' ? '#10B981' : '#EC4899') }}></div>
                         {selectedNode.group}
                       </div>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>System ID</span>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', wordBreak: 'break-all', fontFamily: 'monospace' }}>{selectedNode.id}</div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>System ID</span>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all', fontFamily: 'monospace', background: 'var(--surface-soft)', padding: '4px 8px', borderRadius: '6px', marginTop: '2px' }}>{selectedNode.id}</div>
                     </div>
                   </div>
                 </div>

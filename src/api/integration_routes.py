@@ -234,37 +234,132 @@ def ingest_github_repo(request: GithubIngestRequest, background_tasks: Backgroun
 @router.get("/api/v1/integrations/slack/auth")
 async def slack_auth(tenant_id: str):
     """Redirects the user to the Slack OAuth approval screen."""
-    SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "mock_client_id")
+    SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID")
+    if not SLACK_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Slack Client ID not configured in .env")
     REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/slack/callback"
     auth_url = (
         f"https://slack.com/oauth/v2/authorize?"
-        f"client_id={SLACK_CLIENT_ID}&scope=channels:history,channels:read,users:read&state={tenant_id}"
+        f"client_id={SLACK_CLIENT_ID}&user_scope=channels:history,channels:read,users:read&state={tenant_id}"
         f"&redirect_uri={REDIRECT_URI}"
     )
     return RedirectResponse(auth_url)
 
 @router.get("/api/v1/integrations/slack/callback")
 async def slack_callback(code: str, state: str):
-    """Receives the OAuth code from Slack."""
-    # In a real app, exchange `code` for a token here.
+    """Receives the OAuth code from Slack, exchanges for access token, and saves it."""
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing code or state")
+        
+    tenant_id = state
+    SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID")
+    SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET")
+    REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/slack/callback"
+    
+    response = requests.post(
+        "https://slack.com/api/oauth.v2.access",
+        data={
+            "client_id": SLACK_CLIENT_ID,
+            "client_secret": SLACK_CLIENT_SECRET,
+            "code": code,
+            "redirect_uri": REDIRECT_URI
+        }
+    )
+    
+    if response.status_code != 200 or not response.json().get("ok"):
+        print("Slack Auth Error:", response.text)
+        return RedirectResponse(f"{FRONTEND_URL}/integrations?status=error")
+        
+    data = response.json()
+    # Get user token or authed bot token
+    access_token = data.get("authed_user", {}).get("access_token") or data.get("access_token")
+    team_name = data.get("team", {}).get("name", "Slack Workspace")
+    
+    if not access_token:
+        return RedirectResponse(f"{FRONTEND_URL}/integrations?status=error")
+        
+    admin_db = supabase_manager.get_admin_client()
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    
+    admin_db.table("tenants").upsert({
+        "id": uuid_tenant,
+        "name": f"User {tenant_id}"
+    }).execute()
+    
+    admin_db.table("tenant_integrations").upsert({
+        "tenant_id": uuid_tenant,
+        "integration_type": "slack",
+        "access_token": access_token,
+        "workspace_name": team_name
+    }, on_conflict="tenant_id, integration_type").execute()
+    
     return RedirectResponse(f"{FRONTEND_URL}/integrations?status=success")
+
 
 @router.get("/api/v1/integrations/jira/auth")
 async def jira_auth(tenant_id: str):
     """Redirects the user to the Jira OAuth approval screen."""
-    JIRA_CLIENT_ID = os.environ.get("JIRA_CLIENT_ID", "mock_client_id")
+    JIRA_CLIENT_ID = os.environ.get("JIRA_CLIENT_ID")
+    if not JIRA_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Jira Client ID not configured in .env")
     REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/jira/callback"
     auth_url = (
         f"https://auth.atlassian.com/authorize?"
-        f"audience=api.atlassian.com&client_id={JIRA_CLIENT_ID}&scope=read:jira-work&redirect_uri={REDIRECT_URI}"
-        f"&state={tenant_id}&response_type=code&prompt=consent"
+        f"audience=api.atlassian.com&client_id={JIRA_CLIENT_ID}&scope=read:jira-work%20read:jira-user%20read:me%20offline_access"
+        f"&redirect_uri={REDIRECT_URI}&state={tenant_id}&response_type=code&prompt=consent"
     )
     return RedirectResponse(auth_url)
 
 @router.get("/api/v1/integrations/jira/callback")
 async def jira_callback(code: str, state: str):
-    """Receives the OAuth code from Jira."""
+    """Receives the OAuth code from Jira, exchanges for access token, and saves it."""
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing code or state")
+        
+    tenant_id = state
+    JIRA_CLIENT_ID = os.environ.get("JIRA_CLIENT_ID")
+    JIRA_CLIENT_SECRET = os.environ.get("JIRA_CLIENT_SECRET")
+    REDIRECT_URI = f"{os.environ.get('API_BASE_URL', 'http://localhost:8000')}/api/v1/integrations/jira/callback"
+    
+    response = requests.post(
+        "https://auth.atlassian.com/oauth/token",
+        headers={"Content-Type": "application/json"},
+        json={
+            "grant_type": "authorization_code",
+            "client_id": JIRA_CLIENT_ID,
+            "client_secret": JIRA_CLIENT_SECRET,
+            "code": code,
+            "redirect_uri": REDIRECT_URI
+        }
+    )
+    
+    if response.status_code != 200:
+        print("Jira Auth Error:", response.text)
+        return RedirectResponse(f"{FRONTEND_URL}/integrations?status=error")
+        
+    data = response.json()
+    access_token = data.get("access_token")
+    
+    if not access_token:
+        return RedirectResponse(f"{FRONTEND_URL}/integrations?status=error")
+        
+    admin_db = supabase_manager.get_admin_client()
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    
+    admin_db.table("tenants").upsert({
+        "id": uuid_tenant,
+        "name": f"User {tenant_id}"
+    }).execute()
+    
+    admin_db.table("tenant_integrations").upsert({
+        "tenant_id": uuid_tenant,
+        "integration_type": "jira",
+        "access_token": access_token,
+        "workspace_name": "Jira Cloud Workspace"
+    }, on_conflict="tenant_id, integration_type").execute()
+    
     return RedirectResponse(f"{FRONTEND_URL}/integrations?status=success")
+
 
 @router.get("/api/v1/integrations/google-drive/auth")
 async def gdrive_auth(tenant_id: str):
@@ -417,3 +512,153 @@ def list_gdrive_files(tenant_id: str):
         return {"files": files}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/v1/integrations/active")
+def get_active_integrations(tenant_id: str):
+    try:
+        from src.api.routes import get_tenant_uuid
+        from src.database.supabase_client import supabase_manager
+        uuid_tenant = get_tenant_uuid(tenant_id)
+        admin_db = supabase_manager.get_admin_client()
+        resp = admin_db.table("tenant_integrations").select("integration_type").eq("tenant_id", uuid_tenant).execute()
+        active = [row["integration_type"] for row in resp.data]
+        type_map = {"google_drive": "google-drive", "github": "github", "notion": "notion", "slack": "slack", "jira": "jira"}
+        frontend_ids = [type_map.get(t, t) for t in active]
+        return {"active_integrations": frontend_ids}
+    except Exception as e:
+        return {"active_integrations": []}
+
+@router.delete("/api/v1/integrations/{integration_id}")
+def disconnect_integration(integration_id: str, tenant_id: str):
+    try:
+        from src.api.routes import get_tenant_uuid
+        from src.database.supabase_client import supabase_manager
+        
+        uuid_tenant = get_tenant_uuid(tenant_id)
+        admin_db = supabase_manager.get_admin_client()
+        
+        # Reverse map frontend IDs to DB types
+        db_map = {"google-drive": "google_drive", "github": "github", "notion": "notion", "slack": "slack", "jira": "jira"}
+        db_type = db_map.get(integration_id, integration_id)
+        
+        admin_db.table("tenant_integrations").delete().eq("tenant_id", uuid_tenant).eq("integration_type", db_type).execute()
+        return {"status": "success", "message": f"Disconnected {integration_id}"}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/v1/integrations/notion/pages")
+def get_notion_pages(tenant_id: str):
+    try:
+        from src.api.routes import get_tenant_uuid
+        from src.database.supabase_client import supabase_manager
+        import requests
+        
+        uuid_tenant = get_tenant_uuid(tenant_id)
+        admin_db = supabase_manager.get_admin_client()
+        resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "notion").execute()
+        
+        if not resp.data:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Notion not connected")
+            
+        token = resp.data[0]["access_token"]
+        
+        n_resp = requests.post(
+            "https://api.notion.com/v1/search",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Notion-Version": "2022-06-28",
+                "Content-Type": "application/json"
+            },
+            json={"filter": {"value": "page", "property": "object"}}
+        )
+        
+        if n_resp.status_code != 200:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=n_resp.status_code, detail="Failed to fetch Notion pages")
+            
+        data = n_resp.json()
+        pages = []
+        for p in data.get("results", []):
+            title = "Untitled"
+            props = p.get("properties", {})
+            for k, v in props.items():
+                if v.get("type") == "title":
+                    title_arr = v.get("title", [])
+                    if title_arr:
+                        title = title_arr[0].get("plain_text", "Untitled")
+            pages.append({
+                "id": p.get("id"),
+                "name": title,
+                "url": p.get("url")
+            })
+            
+        return {"pages": pages}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/v1/integrations/slack/channels")
+def get_slack_channels(tenant_id: str):
+    try:
+        from src.api.routes import get_tenant_uuid
+        from src.database.supabase_client import supabase_manager
+        import requests
+        
+        uuid_tenant = get_tenant_uuid(tenant_id)
+        admin_db = supabase_manager.get_admin_client()
+        resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "slack").execute()
+        
+        if not resp.data:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Slack not connected")
+            
+        token = resp.data[0]["access_token"]
+        s_resp = requests.get("https://slack.com/api/conversations.list", headers={"Authorization": f"Bearer {token}"}, params={"exclude_archived": True, "limit": 100})
+        
+        channels = []
+        if s_resp.status_code == 200 and s_resp.json().get("ok"):
+            for c in s_resp.json().get("channels", []):
+                channels.append({"id": c.get("id"), "name": f"#{c.get('name')}", "topic": c.get("topic", {}).get("value", "")})
+                
+        return {"channels": channels}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/v1/integrations/jira/projects")
+def get_jira_projects(tenant_id: str):
+    try:
+        from src.api.routes import get_tenant_uuid
+        from src.database.supabase_client import supabase_manager
+        import requests
+        
+        uuid_tenant = get_tenant_uuid(tenant_id)
+        admin_db = supabase_manager.get_admin_client()
+        resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "jira").execute()
+        
+        if not resp.data:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Jira not connected")
+            
+        token = resp.data[0]["access_token"]
+        # Fetch accessible resources
+        res_resp = requests.get("https://api.atlassian.com/oauth/token/accessible-resources", headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
+        if res_resp.status_code != 200 or not res_resp.json():
+            return {"projects": []}
+            
+        cloud_id = res_resp.json()[0]["id"]
+        p_resp = requests.get(f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project", headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
+        
+        projects = []
+        if p_resp.status_code == 200:
+            for p in p_resp.json():
+                projects.append({"id": p.get("id"), "key": p.get("key"), "name": p.get("name")})
+                
+        return {"projects": projects}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+

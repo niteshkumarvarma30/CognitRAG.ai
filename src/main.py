@@ -8,6 +8,7 @@ from src.api.routes import router as main_router
 from src.api.memory_routes import router as memory_router
 from src.api.integration_routes import router as integration_router
 from src.api.semantic_routes import router as semantic_router
+from src.api.ingestion_routes import router as ingestion_router
 from src.api.workspace_routes import router as workspace_router
 from src.api.security_routes import router as security_router
 from src.api.billing_routes import router as billing_router
@@ -46,6 +47,7 @@ app.include_router(main_router)
 app.include_router(memory_router)
 app.include_router(integration_router)
 app.include_router(semantic_router)
+app.include_router(ingestion_router)
 
 @app.get("/health")
 def health_check():

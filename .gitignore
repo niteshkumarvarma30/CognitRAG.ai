@@ -1,4 +1,4 @@
-﻿.venv/
+.venv/
 __pycache__/
 .env
 *.pdf
@@ -13,3 +13,8 @@ scratch/
 scripts/test_*.py
 scripts/list_bedrock_models.py
 tests/list_gemini.py
+*.pem
+cognitrag-key.pem
+.next/
+*.pyc
+*.swp

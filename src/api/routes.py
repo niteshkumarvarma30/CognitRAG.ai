@@ -485,6 +485,8 @@ async def cancel_chat_stream(msg_id: str):
 async def submit_early_access(request: Request):
     import json
     from datetime import datetime
+    import os
+    import httpx
     try:
         data = await request.json()
     except Exception:
@@ -501,4 +503,34 @@ async def submit_early_access(request: Request):
     with open("early_access_leads.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(lead) + "\n")
     print(f"[Early Access] New lead: {lead['email']} from {lead['company']}")
+    
+    # Send email via Web3Forms
+    web3forms_key = os.environ.get("WEB3FORMS_ACCESS_KEY")
+    if web3forms_key:
+        try:
+            async with httpx.AsyncClient() as client:
+                msg_body = (
+                    f"New Lead Submission!\n\n"
+                    f"Name: {lead['name']}\n"
+                    f"Email: {lead['email']}\n"
+                    f"Company: {lead['company']}\n"
+                    f"Role: {lead['role']}\n"
+                    f"Company Size: {lead['companySize']}\n"
+                    f"Use Case: {lead['useCase']}\n"
+                    f"Timestamp: {lead['timestamp']}"
+                )
+                payload = {
+                    "access_key": web3forms_key,
+                    "subject": "New CognitRAG Early Access Lead",
+                    "from_name": "CognitRAG System",
+                    "name": lead["name"] or "Early Access Lead",
+                    "email": lead["email"],
+                    "message": msg_body
+                }
+                res = await client.post("https://api.web3forms.com/submit", json=payload)
+                print(f"[Web3Forms] Status: {res.status_code}, Response: {res.text}")
+        except Exception as e:
+            print(f"[Web3Forms] Error sending email: {e}")
+            
     return {"status": "ok", "message": "You are on the list!"}
+
