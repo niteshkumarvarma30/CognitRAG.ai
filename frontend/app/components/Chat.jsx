@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Send, Terminal, Loader2, Database, Brain, Sparkles, BookOpen } from 'lucide-react';
+import { Send, Terminal, Loader2, Database, Brain, Sparkles, BookOpen, Mic, MicOff } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 import { Button, Input, Card, Badge, Skeleton } from '@/components/ui';
 import SourceReceipt from './SourceReceipt';
@@ -13,6 +13,10 @@ export default function Chat({ tenantId }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const [workflowStatus, setWorkflowStatus] = useState('');
   const [activeSource, setActiveSource] = useState(null);
   const messagesEndRef = useRef(null);
@@ -21,11 +25,74 @@ export default function Chat({ tenantId }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, workflowStatus]);
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
 
-    const userMessage = { role: 'user', content: input };
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach(track => track.stop());
+        await processVoiceAudio(audioBlob);
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Microphone access denied or error:", err);
+      alert("Please allow microphone permissions to use Sarvam Voice Chat.");
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const processVoiceAudio = async (audioBlob) => {
+    setIsTranscribing(true);
+    setWorkflowStatus('Translating spoken Indic audio to English via Sarvam AI...');
+    try {
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'voice_query.webm');
+
+      const res = await fetch(`${API_BASE}/voice/transcribe`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        throw new Error('Sarvam voice transcription failed');
+      }
+
+      const data = await res.json();
+      if (data.transcript) {
+        setInput(data.transcript);
+        sendChatMessage(data.transcript);
+      }
+    } catch (err) {
+      console.error("Voice error:", err);
+      setWorkflowStatus('Could not translate voice. Please type your query.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const sendChatMessage = async (textToSend) => {
+    const text = textToSend || input;
+    if (!text.trim()) return;
+
+    const userMessage = { role: 'user', content: text };
     const currentChatHistory = [...messages];
     
     setMessages(prev => [...prev, userMessage]);
@@ -40,7 +107,7 @@ export default function Chat({ tenantId }) {
         body: JSON.stringify({
           tenant_id: tenantId,
           user_id: user?.id || 'default_user',
-          message: userMessage.content,
+          message: text,
           chat_history: currentChatHistory
         })
       });
@@ -122,29 +189,30 @@ export default function Chat({ tenantId }) {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 'var(--space-6)', width: '100%', height: '100%', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ flex: '1', display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+    <div style={{ display: 'flex', gap: 'var(--space-6)', width: '100%', height: '100%', margin: '0' }}>
+      <div style={{ flex: '1', display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', width: '100%' }}>
         
         {/* Header */}
         <header style={{ 
-          padding: 'var(--space-5)', borderBottom: '1px solid var(--border)', 
+          padding: 'var(--space-4) var(--space-6)', borderBottom: '1px solid var(--border)', 
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
           background: 'var(--surface-soft)', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0' 
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <div style={{ 
-              width: 40, height: 40, borderRadius: 'var(--radius-md)', 
+              width: 42, height: 42, borderRadius: 'var(--radius-md)', 
               background: 'var(--primary-light)', color: 'var(--primary)', 
               display: 'flex', justifyContent: 'center', alignItems: 'center' 
             }}>
-              <Brain size={20} />
+              <Brain size={22} />
             </div>
             <div>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 650, margin: 0, color: 'var(--text-primary)' }}>CognitRAG Workspace</h2>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{tenantId}</div>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 650, margin: 0, color: 'var(--text-primary)' }}>CognitRAG Workspace Brain</h2>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Workspace ID: {tenantId} • Hybrid GraphRAG + Sarvam Voice Active</div>
             </div>
           </div>
         </header>
+
 
         {/* Chat Area */}
         <div style={{ 
@@ -153,10 +221,49 @@ export default function Chat({ tenantId }) {
           background: 'var(--surface)', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)'
         }}>
           {messages.length === 0 && (
-            <div style={{ margin: 'auto', textAlign: 'center', maxWidth: '400px', color: 'var(--text-secondary)' }}>
-              <Sparkles size={48} style={{ color: 'var(--border)', margin: '0 auto var(--space-4)' }} />
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 'var(--space-2)' }}>How can I help you today?</h3>
-              <p style={{ fontSize: '0.875rem' }}>Ask me about Jira issues, GitHub architecture, Slack decisions, or Notion documents.</p>
+            <div style={{ margin: 'auto', textAlign: 'center', maxWidth: '520px', color: 'var(--text-secondary)' }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-4)' }}>
+                <Brain size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 650, color: 'var(--text-primary)', marginBottom: 'var(--space-2)' }}>How can I help your team today?</h3>
+              <p style={{ fontSize: '0.875rem', marginBottom: 'var(--space-5)', color: 'var(--text-muted)' }}>
+                Ask in English or speak in any Indian language. CognitRAG retrieves verified context from Jira, GitHub, Slack, and Notion.
+              </p>
+              
+              {/* Multilingual Voice Quick Starters */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+                <button 
+                  onClick={() => startVoiceRecording()}
+                  style={{ 
+                    display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', 
+                    borderRadius: 'var(--radius-pill)', border: '1px solid var(--primary)', 
+                    background: 'var(--primary-light)', color: 'var(--primary)', fontSize: '0.8125rem', 
+                    fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s ease' 
+                  }}
+                >
+                  <Mic size={14} /> Speak in Hindi / Tamil / Telugu
+                </button>
+                <button 
+                  onClick={() => sendChatMessage("What are our recent system architecture and deployment decisions?")}
+                  style={{ 
+                    padding: '8px 14px', borderRadius: 'var(--radius-pill)', 
+                    border: '1px solid var(--border)', background: 'var(--surface-soft)', 
+                    color: 'var(--text-secondary)', fontSize: '0.8125rem', cursor: 'pointer' 
+                  }}
+                >
+                  "Recent Architecture Decisions"
+                </button>
+                <button 
+                  onClick={() => sendChatMessage("Summarize current Jira issues and project blockers")}
+                  style={{ 
+                    padding: '8px 14px', borderRadius: 'var(--radius-pill)', 
+                    border: '1px solid var(--border)', background: 'var(--surface-soft)', 
+                    color: 'var(--text-secondary)', fontSize: '0.8125rem', cursor: 'pointer' 
+                  }}
+                >
+                  "Summarize Jira Blockers"
+                </button>
+              </div>
             </div>
           )}
 
@@ -248,25 +355,95 @@ export default function Chat({ tenantId }) {
 
         {/* Input Area */}
         <div style={{ 
-          padding: 'var(--space-5)', background: 'var(--surface)', 
-          border: '1px solid var(--border)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)' 
+          padding: 'var(--space-4) var(--space-5)', 
+          background: 'var(--surface)', 
+          borderTop: '1px solid var(--border)', 
+          borderRadius: '0 0 var(--radius-xl) var(--radius-xl)' 
         }}>
-          <form onSubmit={handleSendMessage} style={{ position: 'relative', display: 'flex', gap: 'var(--space-3)' }}>
-            <Input 
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask anything about your company's knowledge..."
-              disabled={isLoading}
-              style={{ flex: 1, paddingRight: '3rem' }}
-            />
-            <Button 
-              type="submit" 
-              disabled={isLoading || !input.trim()}
-              style={{ position: 'absolute', right: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', padding: 'var(--space-2)' }}
-            >
-              <Send size={16} />
-            </Button>
+          <form onSubmit={(e) => { e.preventDefault(); sendChatMessage(); }} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', width: '100%' }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={isRecording ? "🔴 Listening... Speak in Hindi, Tamil, Telugu, English..." : isTranscribing ? "Translating with Sarvam AI..." : "Ask anything or speak in any Indian language..."}
+                disabled={isLoading || isRecording || isTranscribing}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: 'var(--radius-lg)',
+                  border: isRecording ? '2px solid var(--error)' : '1px solid var(--border)',
+                  background: isRecording ? 'var(--error-light)' : 'var(--surface)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.9375rem',
+                  outline: 'none',
+                  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.03)'
+                }}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Sarvam AI Multilingual Voice Button */}
+              <button
+                type="button"
+                onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                disabled={isLoading || isTranscribing}
+                title={isRecording ? "Stop Recording & Submit" : "Speak in Hindi, Tamil, Telugu, Marathi, etc."}
+                style={{
+                  background: isRecording ? 'var(--error)' : 'var(--primary-light)',
+                  border: isRecording ? '1px solid var(--error)' : '1px solid var(--primary)',
+                  color: isRecording ? '#ffffff' : 'var(--primary)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '10px 14px',
+                  height: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  animation: isRecording ? 'pulse 1.5s infinite' : 'none'
+                }}
+              >
+                {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                <span>{isRecording ? "Stop" : "Voice"}</span>
+              </button>
+
+              <button 
+                type="submit" 
+                disabled={isLoading || isRecording || isTranscribing || !input.trim()}
+                style={{ 
+                  background: (!input.trim() || isLoading) ? 'var(--border)' : 'var(--primary)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '10px 18px',
+                  height: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontWeight: 600,
+                  cursor: (!input.trim() || isLoading) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <Send size={16} />
+                <span>Send</span>
+              </button>
+            </div>
           </form>
+          
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', paddingLeft: '4px', paddingRight: '4px' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              ⚡ Powered by <strong>Sarvam AI</strong>: Speak in Hindi, Tamil, Telugu, Marathi, Bengali & get verified English context.
+            </span>
+            {isRecording && (
+              <Badge variant="error" style={{ fontSize: '0.7rem', animation: 'pulse 1s infinite' }}>
+                RECORDING AUDIO... CLICK "STOP" TO SUBMIT
+              </Badge>
+            )}
+          </div>
         </div>
 
       </div>

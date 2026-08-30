@@ -534,3 +534,59 @@ async def submit_early_access(request: Request):
             
     return {"status": "ok", "message": "You are on the list!"}
 
+
+@router.post("/api/v1/voice/transcribe")
+async def transcribe_voice(file: UploadFile = File(...), target_language_code: Optional[str] = "en-IN"):
+    """
+    Transcribes audio in any Indian language (Hindi, Tamil, Telugu, Bengali, Kannada, 
+    Marathi, Gujarati, Malayalam, Odia, Punjabi) or English using Sarvam AI Saaras STT
+    and returns the translated English text for the Company Brain retrieval pipeline.
+    """
+    sarvam_key = os.environ.get("SARVAM_API_KEY")
+    if not sarvam_key:
+        raise HTTPException(status_code=500, detail="SARVAM_API_KEY not configured in .env")
+        
+    audio_bytes = await file.read()
+    
+    # Sarvam Speech-to-Text translate / transcribe endpoint
+    url = "https://api.sarvam.ai/speech-to-text-translate"
+    headers = {"api-subscription-key": sarvam_key}
+    
+    files = {
+        'file': (file.filename or 'audio.wav', audio_bytes, file.content_type or 'audio/wav')
+    }
+    
+    data = {
+        'model': 'saaras:v2',
+        'prompt': 'Translate and transcribe spoken language accurately into English.'
+    }
+    
+    try:
+        resp = requests.post(url, headers=headers, files=files, data=data, timeout=30)
+        if resp.status_code == 200:
+            res_json = resp.json()
+            transcript = res_json.get("transcript", "")
+            detected_lang = res_json.get("language_code", "unknown")
+            return {
+                "transcript": transcript,
+                "detected_language": detected_lang,
+                "status": "success"
+            }
+        else:
+            # Fallback to standard speech-to-text if translation endpoint differs
+            fallback_url = "https://api.sarvam.ai/speech-to-text"
+            fb_resp = requests.post(fallback_url, headers=headers, files=files, data={'model': 'saaras:v1'}, timeout=30)
+            if fb_resp.status_code == 200:
+                fb_json = fb_resp.json()
+                return {
+                    "transcript": fb_json.get("transcript", ""),
+                    "detected_language": fb_json.get("language_code", "unknown"),
+                    "status": "success"
+                }
+            print(f"Sarvam STT failed: {resp.text}")
+            raise HTTPException(status_code=resp.status_code, detail=f"Sarvam Voice API failed: {resp.text}")
+    except Exception as e:
+        print(f"Voice Transcription Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
