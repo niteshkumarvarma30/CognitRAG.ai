@@ -72,15 +72,16 @@ async def notion_callback(code: str, state: str):
         
     admin_db = supabase_manager.get_admin_client()
     
+    uuid_tenant = get_tenant_uuid(tenant_id)
     # Ensure tenant exists in DB to prevent foreign key constraints
     admin_db.table("tenants").upsert({
-        "id": tenant_id,
+        "id": uuid_tenant,
         "name": f"User {tenant_id}"
     }).execute()
     
     # Save the Notion token to the tenant_integrations table!
     admin_db.table("tenant_integrations").upsert({
-        "tenant_id": tenant_id,
+        "tenant_id": uuid_tenant,
         "integration_type": "notion",
         "access_token": access_token,
         "workspace_name": workspace_name
@@ -157,7 +158,8 @@ async def github_callback(code: str, state: str):
 def github_list_repos(tenant_id: str):
     """Lists the user's GitHub repositories."""
     admin_db = supabase_manager.get_admin_client()
-    resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", tenant_id).eq("integration_type", "github").execute()
+    uuid_tenant = get_tenant_uuid(tenant_id)
+    resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "github").execute()
     
     if not resp.data:
         raise HTTPException(status_code=400, detail="GitHub not connected")

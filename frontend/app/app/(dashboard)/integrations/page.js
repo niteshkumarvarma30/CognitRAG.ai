@@ -14,6 +14,37 @@ export default function IntegrationsPage() {
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [syncing, setSyncing] = useState(false);
+  const [githubModalOpen, setGithubModalOpen] = useState(false);
+  const [githubRepos, setGithubRepos] = useState([]);
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [selectedRepos, setSelectedRepos] = useState([]);
+  const [syncingGithub, setSyncingGithub] = useState(false);
+
+  const fetchGithubRepos = async () => {
+    setGithubModalOpen(true);
+    setLoadingRepos(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${baseUrl}/api/v1/integrations/github/repos?tenant_id=ws_1`);
+      if (res.ok) {
+        const data = await res.json();
+        setGithubRepos(data.repos || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setLoadingRepos(false);
+  };
+
+  const handleSyncGithub = async () => {
+    setSyncingGithub(true);
+    // In a real app, send selectedRepos to backend. For now, simulate syncing.
+    setTimeout(() => {
+      setSyncingGithub(false);
+      setGithubModalOpen(false);
+      setStatusMsg('success');
+    }, 1500);
+  };
 
   const fetchGdriveFiles = async () => {
     setGdriveModalOpen(true);
@@ -70,7 +101,7 @@ export default function IntegrationsPage() {
       description: 'Sync Google Docs, Sheets, and PDFs directly from your corporate Google Workspace.',
       icon: Cloud,
       color: 'var(--info)',
-      status: 'disconnected',
+      status: 'connected',
       isEnterprise: false
     }
   ];
@@ -215,13 +246,16 @@ export default function IntegrationsPage() {
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <RefreshCw size={12} /> Sync: {connector.lastSync}
             </div>
-                          <Button 
+                                        <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={() => connector.id === 'google-drive' ? fetchGdriveFiles() : null}
+                onClick={() => {
+                  if (connector.id === 'google-drive') fetchGdriveFiles();
+                  else if (connector.id === 'github') fetchGithubRepos();
+                }}
                 style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}
               >
-                {connector.id === 'google-drive' ? 'Select Files' : 'Configure'}
+                {connector.id === 'google-drive' ? 'Select Files' : connector.id === 'github' ? 'Select Repos' : 'Configure'}
               </Button>
           </>
         ) : (
@@ -319,6 +353,68 @@ export default function IntegrationsPage() {
         </div>
       )}
 
+
+      
+      {/* GitHub Repo Picker Modal */}
+      {githubModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface)', padding: '2rem', borderRadius: '12px',
+            width: '90%', maxWidth: '600px', border: '1px solid var(--border)',
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column'
+          }}>
+            <h2 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <GitBranch size={24} color="var(--text)" /> Select GitHub Repositories
+            </h2>
+            
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: '300px', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+              {loadingRepos ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '1rem' }}>
+                  <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+                  <span style={{ color: 'var(--text-muted)' }}>Fetching your repositories...</span>
+                </div>
+              ) : githubRepos.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>No repositories found.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {githubRepos.map(repo => (
+                    <label key={repo.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', backgroundColor: 'var(--background)', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedRepos.includes(repo.full_name)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedRepos([...selectedRepos, repo.full_name]);
+                          else setSelectedRepos(selectedRepos.filter(name => name !== repo.full_name));
+                        }}
+                      />
+                      <GitBranch size={18} color="var(--text-muted)" />
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: '500' }}>{repo.name}</span>
+                        {repo.private && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Private</span>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+              <Button variant="ghost" onClick={() => setGithubModalOpen(false)}>Cancel</Button>
+              <Button 
+                variant="primary" 
+                disabled={selectedRepos.length === 0 || syncingGithub}
+                onClick={handleSyncGithub}
+              >
+                {syncingGithub ? <Loader2 className="animate-spin" size={16} /> : `Sync ${selectedRepos.length} Repos`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Google Drive File Picker Modal */}
       {gdriveModalOpen && (
