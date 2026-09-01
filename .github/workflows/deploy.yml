@@ -1,4 +1,4 @@
-﻿name: CI/CD Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -15,8 +15,9 @@ jobs:
       - name: Deploy to AWS EC2
         uses: appleboy/ssh-action@master
         with:
-          host: 13.211.60.208
+          host: 52.65.110.173
           username: ubuntu
+
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd CognitRAG.ai
