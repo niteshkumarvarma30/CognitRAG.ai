@@ -2,17 +2,21 @@
 import React, { useState } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
 import { Terminal, Key, Copy, CheckCircle2, Server, Globe } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
 
 export default function MCPPortalPage() {
+  const { user } = useUser();
   const [copied, setCopied] = useState(false);
+  const activeTenantId = user?.id || "ws_default";
+
   const mcpConfig = `{
   "mcpServers": {
     "cognitrag": {
       "command": "python",
       "args": ["-m", "src.mcp.server"],
       "env": {
-        "TENANT_ID": "ws_12345",
-        "API_KEY": "cog_sk_test_992837482"
+        "TENANT_ID": "${activeTenantId}",
+        "API_BASE_URL": "http://localhost:8000"
       }
     }
   }

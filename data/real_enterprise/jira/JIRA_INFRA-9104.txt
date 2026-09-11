@@ -1,0 +1,19 @@
+Issue Key: INFRA-9104
+Project: Cloud Infrastructure & Cost Engineering
+Type: Improvement | Priority: Major | Status: Resolved
+Reporter: David Patel (FinOps / Infrastructure)
+Assignee: Liam Zhao (Principal Infrastructure Engineer)
+Components: Snowflake, FinOps, Data Warehouse
+
+Title: Optimize Snowflake warehouse auto-suspend and query statement timeouts
+
+Description:
+Monthly cloud bill analysis showed data warehouse compute charges jumped by $34,000 due to runaway user BI queries and oversized auto-suspend timers. 
+
+The `ANALYTICS_WH_XL` warehouse was configured with `AUTO_SUSPEND = 600` (10 minutes), meaning idle warehouses stayed running between hourly scheduled queries. Additionally, unoptimized queries ran up to 48 hours before failing.
+
+Resolution:
+Resolved in GitHub PR #9105. Applied automated governance:
+1) Reduced `AUTO_SUSPEND` to 60 seconds across all virtual warehouses.
+2) Enforced `STATEMENT_TIMEOUT_IN_SECONDS = 1800` (30 minutes max) at the account parameter level.
+3) Configured Slack alerting in `#finops-alerts` when any query runtime exceeds 15 minutes. Projected monthly cost savings: $28,500.

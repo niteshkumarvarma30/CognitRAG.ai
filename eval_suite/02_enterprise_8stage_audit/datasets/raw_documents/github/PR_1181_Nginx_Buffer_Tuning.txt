@@ -1,0 +1,23 @@
+GitHub Pull Request #1181: Tune ingress-nginx proxy buffers and memory allocation limits
+Repo: platform / edge-ingress
+Author: Maya Lin (@mayalin)
+Reviewers: Kevin Miller (@kevinm)
+Status: Merged (Commit: f401a88)
+Related Issues: Resolves K8S-11802
+
+Overview:
+Prevents ingress controller worker OOMKilled events under persistent HTTP/2 mobile client multiplexing.
+
+Changes in `ingress-nginx-values.yaml`:
+```yaml
+controller:
+  config:
+    proxy-buffer-size: "16k"
+    proxy-buffers-number: "4"
+    http2-max-field-size: "16k"
+    client-header-buffer-size: "8k"
+    worker-shutdown-timeout: "240s"
+```
+
+Result:
+Ingress pod memory stabilized at 1.15GB under 45k req/s simulated load testing.

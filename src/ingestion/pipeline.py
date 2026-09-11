@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 from src.database.neo4j_client import neo4j_manager
 from src.database.supabase_client import supabase_manager
+from src.utils.sanitizer import sanitize_text
+from src.ingestion.cross_linker import link_cross_system_entities
 from typing import List
 
 class Entity(BaseModel):
@@ -75,7 +77,12 @@ def extract_graph_from_chunk(chunk: str) -> GraphExtraction:
             time.sleep(20)
     return None
 
-def process_parent_chunk(parent_text: str, tenant_id: str, document_id: str):
+def process_parent_chunk(parent_text: str, tenant_id: str, document_id: str, allowed_entities: list = None):
+    if allowed_entities is None:
+        allowed_entities = ["public"]
+
+    # Pre-Ingestion Data Sanitization (Strip secrets, tokens, passwords, PII)
+    parent_text = sanitize_text(parent_text)
     parent_id = hashlib.sha256(parent_text.encode()).hexdigest()
     
     db = supabase_manager.get_admin_client()
@@ -116,6 +123,11 @@ def process_parent_chunk(parent_text: str, tenant_id: str, document_id: str):
                     MERGE (s)-[r:RELATION {type: $rel_type}]->(t)
                 """, source=rel.source_entity, target=rel.target_entity, rel_type=rel.relation_type, tenant_id=tenant_id)
                 
+    # Deterministic Cross-Tool Entity Linking (Jira <-> GitHub PR <-> Slack <-> Incident)
+    cross_link_result = link_cross_system_entities(resolved_chunk, tenant_id, document_id)
+    if cross_link_result.get("links_created", 0) > 0:
+        print(f"    -> Cross-linked {cross_link_result['links_created']} cross-system entities (Jira/PR/Slack/Incidents).")
+
     entity_names = [ent.name for ent in entities]
     relationship_types = [rel.relation_type for rel in relationships]
     
@@ -154,7 +166,8 @@ def process_parent_chunk(parent_text: str, tenant_id: str, document_id: str):
             "embedding": embeddings_data_list[i],
             "parent_id": parent_id,
             "entities": entity_names,
-            "relationship_types": list(set(relationship_types))
+            "relationship_types": list(set(relationship_types)),
+            "allowed_entities": allowed_entities
         })
         
     try:
@@ -163,7 +176,10 @@ def process_parent_chunk(parent_text: str, tenant_id: str, document_id: str):
     except Exception as e:
         print(f"    -> FAILED to insert chunks into Supabase: {e}")
 
-def run_ingestion_pipeline(tenant_id: str, document_id: str, parent_chunks: list[str]):
+def run_ingestion_pipeline(tenant_id: str, document_id: str, parent_chunks: list[str], allowed_entities: list = None):
+    if allowed_entities is None:
+        allowed_entities = ["public"]
+
     with neo4j_manager.driver.session() as session:
         session.run("MERGE (t:Tenant {id: $tenant_id})", tenant_id=tenant_id)
         session.run("""
@@ -174,10 +190,10 @@ def run_ingestion_pipeline(tenant_id: str, document_id: str, parent_chunks: list
             MERGE (d)-[:BELONGS_TO]->(t)
         """, doc_id=document_id, tenant_id=tenant_id)
 
-    print(f"Starting Bedrock pipeline for {len(parent_chunks)} parent chunks...")
+    print(f"Starting Bedrock pipeline for {len(parent_chunks)} parent chunks with ACL {allowed_entities}...")
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        futures = {executor.submit(process_parent_chunk, chunk, tenant_id, document_id): chunk for chunk in parent_chunks}
+        futures = {executor.submit(process_parent_chunk, chunk, tenant_id, document_id, allowed_entities): chunk for chunk in parent_chunks}
         for future in concurrent.futures.as_completed(futures):
             try:
                 future.result()

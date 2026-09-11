@@ -1,0 +1,8 @@
+Channel: #security-audit-war-room
+Topic: SOC 2 Type II audit remediation tracking
+
+[13:00:22] Jessica Wong: Good afternoon team. Auditor CyberDefense Labs delivered our preliminary report. We have zero critical findings, but two remediation items:
+1) Enable automatic rotation on AWS KMS customer keys (Jira INFRA-8021).
+2) SAML signing cert expiration in Keycloak (Jira AUTH-401).
+[13:04:10] Marcus Vance: INFRA-8021 is already completed via PR #8022. All 24 KMS keys have `KeyRotationEnabled: true`.
+[13:07:00] David Kim: AUTH-401 is merged via PR #4015. Dual-cert rollover is active in Keycloak. We swap to the new primary cert on Nov 1st.

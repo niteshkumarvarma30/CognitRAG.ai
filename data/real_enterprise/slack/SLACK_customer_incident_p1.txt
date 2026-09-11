@@ -1,0 +1,6 @@
+Channel: #customer-incident-p1
+Topic: Customer Escalation: Enterprise client Acme Corp SSO login failure
+
+[12:10:05] David Kim: Acme Corp reported SSO failure: `Invalid SAML response signature`.
+[12:12:30] David Kim: Checked Keycloak realm. Acme's Okta tenant was pointing to the old expiring certificate thumbprint.
+[12:16:00] David Kim: Resent the updated SAML metadata XML generated in PR #4015. Acme IT updated their Okta app. Issue confirmed resolved at 12:22 UTC.

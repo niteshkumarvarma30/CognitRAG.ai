@@ -121,7 +121,8 @@ class JiraCrawler:
                 background_ingestion_pipeline, 
                 self.uuid_tenant, 
                 document_id, 
-                file_bytes
+                file_bytes,
+                filename
             )
             queued += 1
             

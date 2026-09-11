@@ -20,6 +20,13 @@ class GDriveCrawler:
             .eq("integration_type", "google_drive")\
             .execute()
         if not resp.data:
+            legacy_uuid = get_tenant_uuid("ws_1")
+            resp = self.admin_db.table("tenant_integrations")\
+                .select("access_token")\
+                .eq("tenant_id", legacy_uuid)\
+                .eq("integration_type", "google_drive")\
+                .execute()
+        if not resp.data:
             raise ValueError(f"No Google Drive integration found for tenant {self.tenant_id}")
         return resp.data[0]["access_token"]
 
@@ -98,7 +105,8 @@ class GDriveCrawler:
                 background_ingestion_pipeline, 
                 self.uuid_tenant, 
                 document_id, 
-                file_bytes
+                file_bytes,
+                filename_path
             )
             queued += 1
             

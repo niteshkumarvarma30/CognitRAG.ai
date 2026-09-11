@@ -1,8 +1,31 @@
 'use client';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Settings, Users, Shield, Cpu } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
+
+export const SUPERADMIN_EMAIL = 'niteshkumarvarma5722@gmail.com';
 
 export default function Page() {
+  const router = useRouter();
+  const { user, isLoaded } = useUser();
+  const userEmail = user?.primaryEmailAddress?.emailAddress || '';
+  const isSuperAdmin = userEmail === SUPERADMIN_EMAIL;
+
+  useEffect(() => {
+    if (isLoaded) {
+      if (!isSuperAdmin) {
+        const stored = typeof window !== 'undefined' ? localStorage.getItem('cognitrag_persona') : null;
+        if (stored === 'company_brain' || stored === 'enterprise_brain') {
+          router.replace('/enterprise-brain/settings');
+        } else if (stored === 'bharat_intelligence') {
+          router.replace('/bharat-intelligence/settings');
+        } else {
+          router.replace('/dev-studio/settings');
+        }
+      }
+    }
+  }, [isLoaded, isSuperAdmin, router]);
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>

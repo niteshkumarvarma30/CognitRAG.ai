@@ -1,0 +1,26 @@
+UNITED STATES SECURITIES AND EXCHANGE COMMISSION — FORM 10-K
+MICROSOFT CORPORATION — NOTES TO FINANCIAL STATEMENTS
+NOTE 12 — INCOME TAXES
+
+The components of the provision for income taxes were as follows:
+(In millions)
+Year Ended June 30, 2024:
+Current Taxes:
+  Federal: $12,428
+  State: $1,612
+  Foreign: $6,340
+  Total Current: $20,380
+
+Deferred Taxes:
+  Federal: $(1,215)
+  State: $(182)
+  Foreign: $(619)
+  Total Deferred: $(2,016)
+
+Provision for Income Taxes: $18,364
+
+Effective Tax Rate Reconciliation:
+Our effective tax rate was 19.0% for fiscal year 2024, compared to 19.0% for fiscal year 2023. The effective tax rate was lower than the U.S. federal statutory rate of 21%, primarily due to foreign earnings taxed at lower rates, foreign-derived intangible income deductions, and research and development tax credits, partially offset by state income taxes.
+
+Uncertain Tax Positions:
+As of June 30, 2024, the total gross unrecognized tax benefits were $17.1 billion, of which $14.3 billion would affect the effective tax rate if recognized.

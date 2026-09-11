@@ -152,15 +152,18 @@ export default function Chat({ tenantId }) {
                   setMessages(prev => {
                       const newMsgs = [...prev];
                       if (newMsgs.length > 0 && newMsgs[newMsgs.length - 1].isStreaming) {
+                          const existing = newMsgs[newMsgs.length - 1].content;
+                          const finalContent = data.answer?.trim() || existing?.trim() || 'Hello! How can I assist you with your company knowledge today?';
                           newMsgs[newMsgs.length - 1] = { 
                             role: 'assistant', 
-                            content: data.answer, 
+                            content: finalContent, 
                             audit_trail: data.audit_trail || []
                           };
                       } else {
+                          const finalContent = data.answer?.trim() || 'Hello! How can I assist you with your company knowledge today?';
                           newMsgs.push({ 
                             role: 'assistant', 
-                            content: data.answer, 
+                            content: finalContent, 
                             audit_trail: data.audit_trail || []
                           });
                       }
@@ -325,30 +328,36 @@ export default function Chat({ tenantId }) {
                     </div>
                     
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                      {msg.audit_trail.map((audit, idx) => (
-                        <button 
-                          key={idx}
-                          onClick={() => setActiveSource({
-                            type: audit.type === 'vector_chunk' ? 'document' : 'jira',
-                            title: `Source Artifact #${idx + 1}`,
-                            content: audit.content,
-                            label: audit.type,
-                            relevance_score: 0.95
-                          })}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '4px',
-                            padding: '4px 8px', borderRadius: 'var(--radius-md)',
-                            background: 'var(--surface)', border: '1px solid var(--border)',
-                            fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer',
-                            transition: 'background 0.2s'
-                          }}
-                          onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg)'}
-                          onMouseOut={(e) => e.currentTarget.style.background = 'var(--surface)'}
-                        >
-                          <BookOpen size={12} />
-                          Citation {idx + 1}
-                        </button>
-                      ))}
+                      {msg.audit_trail.map((audit, idx) => {
+                        const chipLabel = audit.ref ? `${audit.type ? audit.type.toUpperCase() + ': ' : ''}${audit.ref}` : `Citation ${idx + 1}`;
+                        return (
+                          <button 
+                            key={idx}
+                            onClick={() => setActiveSource({
+                              type: audit.type || 'document',
+                              title: audit.title || `Source Artifact #${idx + 1}`,
+                              content: audit.content,
+                              label: audit.label || audit.type || 'Source',
+                              ref: audit.ref || `Citation ${idx + 1}`,
+                              url: audit.url,
+                              timestamp: audit.timestamp || 'Recently synced',
+                              relevance_score: audit.confidence || 0.95
+                            })}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '5px',
+                              padding: '4px 10px', borderRadius: 'var(--radius-md)',
+                              background: 'var(--surface)', border: '1px solid var(--border)',
+                              fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseOver={(e) => { e.currentTarget.style.background = 'var(--bg)'; e.currentTarget.style.borderColor = 'var(--primary)'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+                          >
+                            <BookOpen size={12} color="var(--primary)" />
+                            {chipLabel}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

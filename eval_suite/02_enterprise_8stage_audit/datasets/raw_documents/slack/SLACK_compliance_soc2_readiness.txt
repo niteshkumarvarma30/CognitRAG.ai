@@ -1,0 +1,6 @@
+Channel: #compliance-soc2-readiness
+Topic: SOC 2 evidence collection and automated audit artifacts
+
+[15:30:10] Jessica Wong: Reminder to leads: All evidence artifacts for Trust Services Criteria CC6.1 and CC6.6 must be uploaded to the compliance portal by Friday.
+[15:33:00] Marcus Vance: Uploaded AWS CloudTrail logs demonstrating KMS automated key rotation.
+[15:35:10] David Kim: Uploaded Okta backchannel logout integration test logs.

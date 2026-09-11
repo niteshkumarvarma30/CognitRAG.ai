@@ -35,7 +35,7 @@ export default function SolutionsMatrix() {
   ];
 
   return (
-    <section style={{ maxWidth: '1200px', margin: '0 auto', padding: 'var(--space-16, 64px) var(--space-4, 16px)' }}>
+    <section id="solutions" style={{ maxWidth: '1200px', margin: '0 auto', padding: 'var(--space-16, 64px) var(--space-4, 16px)', scrollMarginTop: '80px' }}>
       <h2 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 'var(--space-12, 48px)' }}>
         Built for every team that needs context
       </h2>

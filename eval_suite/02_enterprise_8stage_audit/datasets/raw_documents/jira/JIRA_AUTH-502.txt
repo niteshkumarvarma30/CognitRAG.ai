@@ -1,0 +1,18 @@
+Issue Key: AUTH-502
+Project: Identity & Access Management
+Type: Security / Bug | Priority: High | Status: Resolved
+Reporter: David Kim (IAM Specialist)
+Assignee: Kevin Miller (Edge Network Engineering)
+Components: OpenID Connect, OAuth2, Session Revocation
+
+Title: Implement OIDC Backchannel Logout (RFC 7478) for immediate employee offboarding
+
+Description:
+During security review SEC-2024-09, it was discovered that when an employee account is disabled in Okta, existing active JWT access tokens remain valid until their natural 60-minute expiration. Single-page applications and native clients continued accessing API Gateway endpoints.
+
+Resolution:
+Resolved in GitHub PR #5023. Implemented OpenID Connect Backchannel Logout handler:
+1) Exposed `/oauth/v2/backchannel-logout` endpoint on API Gateway.
+2) Validates `logout_token` JWT signed by Okta IDP.
+3) Publishes user ID to Redis revocation set `revoked_sessions:{user_id}` with TTL matching max token lifetime.
+4) API Gateway authorizer lambda verifies revocation list on every incoming request. Offboarding latency reduced from 60 minutes to < 800ms.

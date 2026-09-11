@@ -3,11 +3,12 @@ import React from 'react';
 
 export default function CompanyBrainSection() {
   return (
-    <section style={{
+    <section id="product" style={{
       width: '100%',
       display: 'flex',
       justifyContent: 'center',
-      padding: '80px 24px'
+      padding: '80px 24px',
+      scrollMarginTop: '80px'
     }}>
       <div style={{
         maxWidth: '1000px',
@@ -22,27 +23,35 @@ export default function CompanyBrainSection() {
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
           fontSize: '0.75rem',
-          fontWeight: 700,
+          fontWeight: 750,
           marginBottom: '16px'
         }}>
-          THE SOLUTION
+          THE UNIFIED PIPELINE
         </div>
         <h2 style={{
-          fontSize: '2.5rem',
-          fontWeight: 700,
+          fontSize: '2.75rem',
+          fontWeight: 800,
           color: 'var(--text-primary)',
-          lineHeight: 1.2,
-          margin: '0 0 64px 0'
+          letterSpacing: '-0.03em',
+          lineHeight: 1.18,
+          margin: '0 0 16px 0'
         }}>
-          One connected layer for everything your company knows.
+          One Connected Layer for Everything Your Company Knows
         </h2>
+        <p style={{
+          color: 'var(--text-secondary)',
+          fontSize: '1.125rem',
+          maxWidth: '650px',
+          margin: '0 0 54px 0',
+          lineHeight: 1.6
+        }}>
+          Automated entity extraction, relationship mapping, and multi-tenant graph storage turn scattered workplace documents into an auditable intelligence core.
+        </p>
 
         <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexWrap: 'wrap',
-          gap: '16px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: '20px',
           width: '100%'
         }}>
           {/* Box 1 */}
@@ -50,54 +59,91 @@ export default function CompanyBrainSection() {
             backgroundColor: 'var(--surface)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-xl)',
-            padding: '24px',
-            minWidth: '250px',
-            flex: '1 1 auto'
+            padding: '32px 24px',
+            textAlign: 'left',
+            boxShadow: 'var(--shadow-sm)',
+            position: 'relative'
           }}>
-            <div style={{ fontWeight: 700, fontSize: '1.125rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
-              Company Data
+            <div style={{
+              fontSize: '0.6875rem',
+              fontWeight: 800,
+              color: 'var(--primary)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              marginBottom: '12px'
+            }}>
+              STAGE 01 • INGESTION
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
-              Slack, Jira, GitHub, Docs, CRM
+            <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
+              Multi-Source Connectors
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+              Real-time synchronization across Slack, Jira, GitHub PRs, SEC 10-K PDFs, and SQL tables.
+            </p>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              Chunking • Metadata • Tokenization
             </div>
           </div>
 
-          <div style={{ color: 'var(--text-muted)', fontSize: '1.5rem' }}>→</div>
-
-          {/* Box 2 */}
+          {/* Box 2: Highlighted Core */}
           <div style={{
-            backgroundColor: 'var(--surface-soft)',
-            border: '1px solid rgba(99, 91, 255, 0.3)',
-            boxShadow: 'var(--shadow-glow)',
+            backgroundColor: 'var(--surface)',
+            border: '2px solid var(--primary)',
+            boxShadow: '0 12px 32px rgba(79, 70, 229, 0.12)',
             borderRadius: 'var(--radius-xl)',
             padding: '32px 24px',
-            minWidth: '280px',
-            flex: '1 1 auto'
+            textAlign: 'left',
+            position: 'relative',
+            transform: 'scale(1.02)'
           }}>
-            <div style={{ fontWeight: 700, fontSize: '1.125rem', color: 'var(--primary)', marginBottom: '8px' }}>
-              Company Brain
+            <div style={{
+              fontSize: '0.6875rem',
+              fontWeight: 800,
+              color: 'var(--primary)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              marginBottom: '12px'
+            }}>
+              STAGE 02 • GRAPH ENGINE
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
-              Entities • Relationships • Rules • Decisions
+            <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '8px' }}>
+              Autonomous Company Brain
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+              Neo4j knowledge graphs map entities, dependencies, coreferences, and historical decisions.
+            </p>
+            <div style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 650 }}>
+              ✓ Sub-50ms Graph + pgvector Hybrid Search
             </div>
           </div>
-
-          <div style={{ color: 'var(--text-muted)', fontSize: '1.5rem' }}>→</div>
 
           {/* Box 3 */}
           <div style={{
             backgroundColor: 'var(--surface)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-xl)',
-            padding: '24px',
-            minWidth: '250px',
-            flex: '1 1 auto'
+            padding: '32px 24px',
+            textAlign: 'left',
+            boxShadow: 'var(--shadow-sm)'
           }}>
-            <div style={{ fontWeight: 700, fontSize: '1.125rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
-              Intelligence
+            <div style={{
+              fontSize: '0.6875rem',
+              fontWeight: 800,
+              color: 'var(--primary)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              marginBottom: '12px'
+            }}>
+              STAGE 03 • VERIFICATION
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
-              Answers • SOPs • Skills • Agents
+            <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
+              Grounded Intelligence
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+              Audited by reasoning LLM judges with verifiable subgraphs, page citations, and MCP support.
+            </p>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              100% Auditable Citations • 98.2% Faithfulness
             </div>
           </div>
         </div>

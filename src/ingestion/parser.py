@@ -27,6 +27,8 @@ def clean_financial_text(text: str) -> str:
     text = re.sub(r'<[^>]+>', '', text)
     # Remove URLs
     text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+    # Strip table-of-contents dot leaders (e.g. ................ 12)
+    text = re.sub(r'\.{4,}', ' ', text)
     # Remove excessive blank lines and whitespace
     text = re.sub(r'\n{3,}', '\n\n', text)
     # Remove purely numeric/symbolic lines that are just table artifacts

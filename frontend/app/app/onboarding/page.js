@@ -1,11 +1,24 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, Button, Input } from '@/components/ui';
 import { Briefcase, Link as LinkIcon, ShieldCheck, Zap, Bot, ArrowRight, Loader2, MessageSquare, GitBranch, FileText } from 'lucide-react';
 
 export default function OnboardingPage() {
   const router = useRouter();
+
+  // Deprecate legacy onboarding: redirect directly to the persona's dedicated dashboard
+  useEffect(() => {
+    const storedPersona = typeof window !== 'undefined' ? localStorage.getItem('cognitrag_persona') : null;
+    if (storedPersona === 'company_brain' || storedPersona === 'enterprise_brain') {
+      router.replace('/enterprise-brain');
+    } else if (storedPersona === 'bharat_intelligence') {
+      router.replace('/bharat-intelligence');
+    } else {
+      router.replace('/dev-studio');
+    }
+  }, [router]);
+
   const [step, setStep] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
 

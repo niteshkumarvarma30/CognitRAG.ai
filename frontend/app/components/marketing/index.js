@@ -16,3 +16,7 @@ export { default as PricingSection } from './PricingSection';
 export { default as FAQSection } from './FAQSection';
 export { default as FinalCTA } from './FinalCTA';
 export { default as Footer } from './Footer';
+export { default as CognitiveBrainInteractive } from './CognitiveBrainInteractive';
+export { default as GroundedScenariosSection } from './GroundedScenariosSection';
+export { default as PersonaShowcaseSection } from './PersonaShowcaseSection';
+export { default as PersonaSelectionModal } from './PersonaSelectionModal';

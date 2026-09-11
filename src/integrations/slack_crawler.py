@@ -124,7 +124,8 @@ class SlackCrawler:
                     background_ingestion_pipeline, 
                     self.uuid_tenant, 
                     document_id, 
-                    file_bytes
+                    file_bytes,
+                    doc_title
                 )
                 queued_count += 1
                 

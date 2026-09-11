@@ -46,7 +46,7 @@ export default function Page() {
               <div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>Total Tokens Used</p>
                 <h2 style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                  {billingData.total_tokens_used.toLocaleString()}
+                  {(billingData?.total_tokens_used ?? 0).toLocaleString()}
                 </h2>
               </div>
             </div>
@@ -85,7 +85,7 @@ export default function Page() {
                       <td style={{ padding: '1rem', color: 'var(--text-primary)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <Clock size={16} color="var(--text-secondary)" />
-                          {new Date(tx.created_at).toLocaleString()}
+                          {tx.created_at ? new Date(tx.created_at).toLocaleString() : 'Recently'}
                         </div>
                       </td>
                       <td style={{ padding: '1rem' }}>
@@ -101,7 +101,7 @@ export default function Page() {
                         </span>
                       </td>
                       <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '600', color: 'var(--text-primary)' }}>
-                        {tx.tokens_used.toLocaleString()}
+                        {(tx.tokens_used ?? 0).toLocaleString()}
                       </td>
                     </tr>
                   ))

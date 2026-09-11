@@ -47,7 +47,7 @@ export default function IntegrationsGrid() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-8, 32px)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 'var(--space-8, 32px)' }}>
         {categories.map((cat, i) => (
           <div key={i}>
             <div style={{ textTransform: 'uppercase', color: 'var(--text-muted)', fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '8px' }}>

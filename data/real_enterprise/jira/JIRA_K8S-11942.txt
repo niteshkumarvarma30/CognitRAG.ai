@@ -1,0 +1,19 @@
+Issue Key: K8S-11942
+Project: Production Kubernetes Infrastructure
+Type: Bug | Priority: Blocker | Status: Resolved
+Reporter: Carlos Santos (DevOps / Platform)
+Assignee: Maya Lin (Container Runtime Specialist)
+Components: CNI, Calico, IPAM, EKS
+
+Title: Calico IPAM IP exhaustion under rapid pod autoscaling in payment gateway namespace
+
+Description:
+During flash sales, the `payment-gateway` HPA scales pods from 20 to 180 within 3 minutes. When pods are subsequently terminated, Calico CNI fails to release leased IP addresses back to the CIDR pool block (`10.244.0.0/16`).
+
+Nodes report `no available IPs in assigned block` despite having only 12 active pods. New pods enter `ContainerCreating` with error: `failed to allocate for range: no IP addresses available in range set: 10.244.32.1-10.244.32.64`.
+
+Resolution:
+Resolved in GitHub PR #1195. Updated `calico-node` daemonset configuration:
+1) Configured `autoReleaseUnusedPerNodeBlocks: true`.
+2) Lowered `releaseTimeout: 5m` (from default 30m).
+3) Ran `calicoctl ipam release --unallocated` script across all nodes in production cluster.

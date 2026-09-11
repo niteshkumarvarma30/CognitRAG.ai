@@ -138,7 +138,22 @@ def route_query(state):
             model="openai/gpt-oss-120b",
             response_model=RouteDecision,
             messages=[
-                {"role": "system", "content": "Classify the intent of the user query. ONLY return 'greeting' or 'faq' for pure small talk (like 'hello', 'who are you'). Return 'conversational' if the user asks about the conversation history itself. Return 'personal' for questions about user preferences. Return 'followup' for queries needing previous chat context. Return 'agent_query' for complex multi-step questions that require calculating metrics, combining data from multiple sources, comparing entities, or answering questions that mention business KPIs like revenue, churn, growth rate, etc. CRITICAL: Any query asking 'What are', 'How to', 'What is the default', or anything about configurations, options, variables, parameters, or technical terms MUST ALWAYS be classified as 'technical_query'. When in doubt between technical_query and agent_query, default to 'technical_query'. Also extract technical entities and determine if memory or graph search is needed."},
+                {"role": "system", "content": (
+                    "Classify the intent of the user query into exactly one category:\n"
+                    "- 'greeting': pure greetings like 'hello', 'hi'.\n"
+                    "- 'faq': general small talk, chit-chat, or completely out-of-scope non-corporate queries (e.g. weather forecast, creative writing, poetry, cooking recipes, sports, general world trivia).\n"
+                    "- 'conversational': questions about the ongoing conversation history itself.\n"
+                    "- 'personal': questions about the user's explicit preferences.\n"
+                    "- 'followup': queries that directly refer back to previous conversation turns.\n"
+                    "- 'agent_query': complex multi-step analysis comparing entities, calculating financial KPIs (revenue, churn, growth), or cross-domain rollups.\n"
+                    "- 'technical_query': any question about corporate documentation, audits, compliance reports, Drive/Notion/Jira documents, system configurations, options, API endpoints, technical parameters, or codebase facts.\n\n"
+                    "TARGET EXAMPLES:\n"
+                    "- 'Who conducted the security audit in the Drive compliance summary?' -> technical_query\n"
+                    "- 'What is the weather forecast in Tokyo for next Tuesday?' -> faq\n"
+                    "- 'Can you write a poem about the sunrise over Mount Fuji?' -> faq\n"
+                    "- 'Can you give me a recipe for authentic Neapolitan pizza dough?' -> faq\n"
+                    "When in doubt between technical_query and agent_query, default to 'technical_query'. Also extract technical entities and determine if memory or graph search is needed."
+                )},
                 {"role": "user", "content": question}
             ]
         )
@@ -164,9 +179,10 @@ def retrieve(state):
     
     user_id = state.get("user_id", "default_user")
     query_embedding = state.get("query_embedding", [])
+    user_permissions = state.get("user_permissions", ["public"])
     
     # 1. Retrieve Candidate Chunks
-    docs, high_conf = hybrid_retriever(tenant_id, user_id, question, query_embedding, top_k=10)
+    docs, high_conf = hybrid_retriever(tenant_id, user_id, question, query_embedding, top_k=10, user_permissions=user_permissions)
     # Load Preferences & Facts if they weren't loaded by load_memory (i.e. technical queries)
     preferences = state.get("preferences", {})
     user_facts = state.get("user_facts", "")
@@ -377,7 +393,7 @@ def fuse_and_rerank(state):
     # Cap to max 15 items and extract just the content strings for the Generator
     final_context = "\n\n---\n\n".join([doc["content"] for doc in final_context_list[:15]])
     
-    return {"documents": final_context}
+    return {"documents": final_context, "raw_documents": final_context_list[:15]}
 
 
 @traceable(name="load_semantic_context")
@@ -393,6 +409,7 @@ def load_semantic_context(state):
 
 @traceable(name="generate_answer")
 def generate(state, config):
+    import re
     print("--- GENERATING FINAL ANSWER VIA NVIDIA LLAMA 3 ---")
     question = state["question"]
     documents = state["documents"]
@@ -412,6 +429,7 @@ def generate(state, config):
         "2. If the user asks for a number, date, or specific value, output ONLY that exact value if possible. "
         "3. NEVER hallucinate. If the exact answer cannot be mathematically derived from the context, say exactly 'I don't know.' "
         "4. Do NOT say 'According to the context...' Just answer directly. "
+        "5. TEMPORAL SUPERSEDING: If the context contains multiple timestamps or version history, always treat the most recent timestamp as the active truth. Explicitly recognize older facts as superseded/deprecated. "
         "If the user asks about the conversation itself, answer using the Recent Chat History."
     )
 
@@ -422,6 +440,15 @@ def generate(state, config):
     if preferences:
         system_prompt += f"\n\nCRITICAL USER PREFERENCES YOU MUST FOLLOW:\n{preferences}"
         
+    from src.retrieval.hybrid import detect_query_source_type
+    target_source = detect_query_source_type(question)
+    if target_source != "general":
+        system_prompt += (
+            f"\n\nCRITICAL SOURCE DOMAIN CONSTRAINT: The user asked specifically about a {target_source.upper()} document/channel. "
+            f"Base your factual claims strictly on chunks originating from that source type. "
+            f"Do not cross-pull or substitute facts from different document types in the incident cluster."
+        )
+
     context_block = f"Context:\n{documents}"
     if user_facts:
         context_block += f"\n\nRelevant User Facts:\n{user_facts}"
@@ -439,47 +466,135 @@ def generate(state, config):
         context_block += f"\n\nRecent Chat History:\n{history_str}"
     
     import time
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            response = groq_client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                temperature=0.0,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"{context_block}\n\nQuestion: {question}"}
-                ]
-            )
+    models_to_try = ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
+    response = None
+    for attempt in range(4):
+        for model_name in models_to_try:
+            try:
+                response = groq_client.chat.completions.create(
+                    model=model_name,
+                    temperature=0.0,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"{context_block}\n\nQuestion: {question}"}
+                    ]
+                )
+                break
+            except Exception as e:
+                err_str = str(e).lower()
+                if "429" in err_str or "connection" in err_str or "connect" in err_str or "timeout" in err_str or "getaddrinfo" in err_str:
+                    continue
+                else:
+                    raise e
+        if response is not None:
             break
-        except Exception as e:
-            if "429" in str(e) and attempt < max_retries - 1:
-                sleep_time = 2 ** attempt * 5
-                print(f"NVIDIA API rate limit hit in generator. Retrying in {sleep_time} seconds...")
-                time.sleep(sleep_time)
-            else:
-                raise e
+        print(f"Rate limits hit across models on attempt {attempt+1}/4. Backing off for 4s...")
+        time.sleep(4)
+
+    if response is None:
+        raise RuntimeError("All generative models exhausted rate limits after retries.")
     
-    # Phase 3: Build Audit Trail
-    audit_trail = []
-    if isinstance(state.get("documents"), list):
-        for doc in state.get("documents", [])[:5]:
-            audit_trail.append({
-                "type": "vector_chunk",
-                "content": doc.get("content", "")[:200] + "...",
-                "parent_id": doc.get("parent_id", "")
+    raw_generation = response.choices[0].message.content or ""
+    clean_generation = re.sub(r"<think>.*?</think>", "", raw_generation, flags=re.DOTALL).strip()
+    if not clean_generation and raw_generation:
+        clean_generation = raw_generation.strip()
+
+    # Phase 3: Build Rich Audit Trail & Evidence Receipts
+    evidence = []
+    raw_docs = state.get("raw_documents", [])
+    if not raw_docs and isinstance(state.get("documents"), list):
+        raw_docs = state.get("documents")
+
+    import re
+    ans_lower = clean_generation.lower().replace("’", "'").replace("“", '"').replace("”", '"')
+    refusals = [
+        "i don't know", "i do not know", "not mentioned", "not provided", 
+        "cannot be determined", "no information", "does not contain", 
+        "i am sorry, but", "i'm sorry, but", "not found in the provided",
+        "no direct mention", "no relevant information", "unable to answer",
+        "no information provided", "insufficient context", "can't provide",
+        "cannot provide"
+    ]
+    is_refusal = any(r in ans_lower for r in refusals)
+
+    if is_refusal:
+        # Architecture revision: Refusals during generation immediately force displayed confidence to near-zero (0.05)
+        confidence_score = 0.05
+    else:
+        for idx, doc in enumerate(raw_docs[:5]):
+            content = doc.get("content", "")
+            content_lower = content.lower()
+            ans_tokens = [w.lower() for w in re.findall(r'\b[a-zA-Z0-9_\-]{3,}\b', ans_lower)]
+            stopwords = {"the", "was", "for", "and", "that", "this", "with", "from", "into", "what", "which", "will"}
+            meaningful_ans_tokens = [w for w in ans_tokens if w not in stopwords]
+            
+            # Verify that chunk content actually supports the claim
+            has_support = any(tok in content_lower for tok in meaningful_ans_tokens) if meaningful_ans_tokens else False
+            if not has_support:
+                continue
+
+            source_type = "document"
+            ref_id = f"Doc #{idx+1}"
+            title = "Verified Knowledge Chunk"
+            url = None
+            
+            jira_match = re.search(r'\b([A-Z]{2,10}-\d+)\b', content)
+            pr_match = re.search(r'(?:PR\s*#?|pull/\s*|#)(\d{1,6})\b', content, re.IGNORECASE)
+            slack_match = re.search(r'#([a-zA-Z0-9_\-]{2,50})\b', content)
+            
+            if jira_match:
+                source_type = "jira"
+                ref_id = jira_match.group(1)
+                title = f"Jira: {ref_id}"
+                url = f"https://atlassian.net/browse/{ref_id}"
+            elif pr_match:
+                source_type = "github"
+                ref_id = f"PR #{pr_match.group(1)}"
+                title = f"GitHub: {ref_id}"
+                url = f"https://github.com/pull/{pr_match.group(1)}"
+            elif slack_match:
+                source_type = "slack"
+                ref_id = f"#{slack_match.group(1)}"
+                title = f"Slack: {ref_id}"
+
+            evidence.append({
+                "type": source_type,
+                "ref": ref_id,
+                "title": title,
+                "label": source_type.upper(),
+                "content": content,
+                "url": url,
+                "timestamp": "Recently synced",
+                "confidence": 0.95
             })
-    if state.get("graph_context"):
-        for line in state["graph_context"].split("\n")[:5]:
-            if line.strip():
-                audit_trail.append({"type": "graph_relationship", "content": line})
-    if semantic_definitions:
-        audit_trail.append({"type": "semantic_definition", "content": semantic_definitions.strip()})
+
+        if state.get("graph_context"):
+            for line in state["graph_context"].split("\n")[:4]:
+                if line.strip():
+                    evidence.append({
+                        "type": "jira",
+                        "ref": "GRAPH-EDGE",
+                        "title": "Knowledge Graph Relationship",
+                        "label": "GRAPH",
+                        "content": line.strip(),
+                        "timestamp": "Live Graph",
+                        "confidence": 0.98
+                    })
+
+        if len(evidence) >= 2:
+            confidence_score = 0.95
+        elif len(evidence) == 1:
+            confidence_score = 0.80
+        else:
+            confidence_score = 0.20
 
     return {
-        "generation": response.choices[0].message.content,
+        "generation": clean_generation,
         "system_prompt": system_prompt,
         "context_block": context_block,
-        "audit_trail": audit_trail
+        "audit_trail": evidence,
+        "evidence": evidence,
+        "confidence_score": confidence_score
     }
 
 @traceable(name="load_memory")
@@ -669,26 +784,70 @@ def rewrite(state):
     print("--- REWRITING QUERY VIA SARVAM-105B ---")
     question = state["question"]
     rewrite_count = state.get("rewrite_count", 0) + 1
-    try:
-        decision = groq_instructor.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            response_model=RewrittenQuery,
-            messages=[
-                {"role": "system", "content": "You are a search query rewriter. Your ONLY job is to output a new reformulated search query based on the user's input to make it better for a vector database search. DO NOT provide explanations, do NOT converse. Just output the new query."},
-                {"role": "user", "content": question}
-            ]
-        )
-        new_q = decision.new_query
-    except Exception as e:
-        print("Rewrite failed, using original.")
-        new_q = question
+    new_q = question
+    models_to_try = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
+    for m in models_to_try:
+        try:
+            decision = groq_instructor.chat.completions.create(
+                model=m,
+                response_model=RewrittenQuery,
+                messages=[
+                    {"role": "system", "content": "You are a search query rewriter. Your ONLY job is to output a new reformulated search query based on the user's input to make it better for a vector database search. DO NOT provide explanations, do NOT converse. Just output the new query."},
+                    {"role": "user", "content": question}
+                ]
+            )
+            new_q = decision.new_query
+            break
+        except Exception as e:
+            if "429" in str(e):
+                continue
+            print(f"Rewrite failed with model {m}, trying fallback...")
         
     print(f"New query: {new_q} (Rewrite #{rewrite_count})")
     return {"question": new_q, "rewrite_count": rewrite_count}
 
 def generate_cached(state):
-    print("--- GENERATING CACHED RESPONSE ---")
-    return {"generation": state.get("generation", "Error: No cached generation found.")}
+    print("--- GENERATING CACHED / GREETING RESPONSE ---")
+    cached_gen = state.get("generation")
+    if cached_gen and state.get("route") == "cached":
+        return {"generation": cached_gen}
+
+    question = state.get("question", "").strip()
+    route = state.get("route", "greeting")
+
+    # 1. Try to generate a warm, concise conversational response via Groq
+    try:
+        system_prompt = (
+            "You are CognitRAG, an intelligent Company Brain assistant for enterprises. "
+            "You connect and index knowledge across Slack, Jira, GitHub, Notion, and internal company documentation. "
+            "Respond warmly, naturally, and concisely (1 to 2 sentences) to the user's greeting or question. "
+            "Ask how you can help them navigate their company's documents, engineering tasks, or decisions today."
+        )
+        response = groq_client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            temperature=0.7,
+            max_tokens=120,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": question or "Hello"}
+            ]
+        )
+        greeting_text = response.choices[0].message.content.strip()
+        if greeting_text:
+            return {"generation": greeting_text}
+    except Exception as e:
+        print(f"Greeting generation via LLM failed ({e}), using reliable fallback.")
+
+    # 2. Reliable fallback if LLM is unavailable or rate limited
+    q_lower = question.lower()
+    if any(greet in q_lower for greet in ["hi", "hey", "hello", "morning", "afternoon", "evening"]):
+        fallback = "Hello! I'm CognitRAG, your Company Brain assistant. How can I help you navigate your team's documents, engineering PRs, Jira tickets, or policies today?"
+    elif "who are you" in q_lower or "what can you do" in q_lower:
+        fallback = "I am CognitRAG, your Company Brain. I unify company context across your workplace tools—including Slack, Jira, GitHub, and docs—to give you direct, verified answers backed by source citations. How can I assist you today?"
+    else:
+        fallback = "Hello! I am CognitRAG, your Company Brain assistant. What company knowledge or questions can I help you find today?"
+
+    return {"generation": fallback}
 
 @traceable(name="contextualize_query")
 def contextualize_query(state):

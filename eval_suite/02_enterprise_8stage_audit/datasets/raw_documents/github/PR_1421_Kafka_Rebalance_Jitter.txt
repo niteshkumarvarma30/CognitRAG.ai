@@ -1,0 +1,22 @@
+GitHub Pull Request #1421: Add randomized jitter backoff to consumer group join requests
+Repo: streaming-platform / kafka-core
+Author: Dave K. (@dave-k)
+Reviewers: Sarah Jenkins (@sjenkins)
+Status: Merged (Commit: c7e210f)
+Related Issues: Resolves KAFKA-14209
+
+Overview:
+Prevents herd rebalance thundering during broker rolling restarts by introducing exponential backoff jitter into consumer join attempts.
+
+Diff:
+```scala
+// core/src/main/scala/kafka/coordinator/group/GroupCoordinator.scala
+- def handleJoinGroup(groupId: String, ...): Unit = {
++ def handleJoinGroup(groupId: String, ...): Unit = {
++   val backoff = ThreadLocalRandom.current().nextInt(minJitterMs, maxJitterMs)
++   timer.add(new TimerTask(backoff) { override def run(): Unit = processJoin(groupId) })
++ }
+```
+
+Production Verification:
+Tested on 1,200 member consumer group during simulated broker rolling restart in staging. Maximum rebalance time dropped from 340s to 12s.

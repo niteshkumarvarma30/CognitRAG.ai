@@ -33,5 +33,13 @@ class GraphState(TypedDict):
     next_agent: str
     worker_responses: Dict[str, str]
     
-    # Phase 3: Audit Trail
+    # Phase 3: Audit Trail & Evidence Receipts
     audit_trail: List[Dict[str, Any]]
+    raw_documents: List[Dict[str, Any]]
+    evidence: List[Dict[str, Any]]
+    
+    # Phase 4: Enterprise ACL & Permissions
+    user_permissions: List[str]
+    
+    # Confidence calibration
+    confidence_score: float

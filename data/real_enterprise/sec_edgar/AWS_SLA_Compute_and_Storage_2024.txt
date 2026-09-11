@@ -1,0 +1,18 @@
+AMAZON WEB SERVICES — SERVICE LEVEL AGREEMENT (SLA)
+COVERED SERVICES: AMAZON EC2, AMAZON EBS, AND AMAZON S3
+EFFECTIVE: CALENDAR YEAR 2024
+
+Service Commitment:
+AWS will use commercially reasonable efforts to make Amazon EC2 and Amazon EBS available with a Monthly Uptime Percentage of at least 99.99% during any monthly billing cycle across Multiple Availability Zones within the same region.
+
+Service Credits:
+Monthly Uptime Percentage:
+- Less than 99.99% but equal to or greater than 99.0%: 10% Service Credit
+- Less than 99.0% but equal to or greater than 95.0%: 25% Service Credit
+- Less than 95.0%: 100% Service Credit
+
+Exclusions:
+The Service Commitment does not apply to any unavailability, suspension, or termination of Covered Services:
+1. Caused by factors outside our reasonable control, including any force majeure event or Internet access problems beyond the demarcation point of AWS.
+2. Resulting from any actions or inactions of customer or third parties.
+3. Resulting from customer's software, configurations, or hardware.

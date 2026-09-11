@@ -1,0 +1,17 @@
+Issue Key: BILL-301
+Project: Enterprise Billing & Payments
+Type: Bug | Priority: Blocker | Status: Resolved
+Reporter: Sarah Jenkins (Lead SRE)
+Assignee: Michael Chang (FinTech Transaction Core)
+Components: Stripe Webhooks, API Gateway, FastAPI
+
+Title: Stripe webhook signature verification failure on API version 2024-06-20
+
+Description:
+Following our upgrade to Stripe API version `2024-06-20`, checkout webhook notifications for `customer.subscription.created` and `invoice.payment_succeeded` began failing with HTTP 400: `Invalid signature: timestamp outside the tolerance zone`.
+
+Root Cause:
+API Gateway raw payload passthrough was stripping binary bytes and converting JSON to Unicode normalized text, altering the payload byte representation before HMAC-SHA256 signature computation. Furthermore, clock drift on our webhook consumer pods exceeded the 300-second tolerance window.
+
+Resolution:
+Resolved in GitHub PR #3011. Configured API Gateway binary media types for `application/json` webhook paths to preserve raw request bytes. Synchronized pod system clocks using Amazon Time Sync Service (chrony NTP). All webhooks successfully processing within 45ms.

@@ -1,61 +1,107 @@
 'use client';
-
-import { ArrowRight } from 'lucide-react';
+import React from 'react';
+import { ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
 
 export default function FinalCTA({ onEarlyAccess }) {
   return (
     <section style={{
-      background: 'var(--surface-dark)',
-      padding: 'var(--space-24) var(--space-6)',
+      background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(79, 70, 229, 0.09), var(--surface))',
+      borderTop: '1px solid var(--border)',
+      padding: 'var(--space-24, 96px) var(--space-6, 24px)',
       textAlign: 'center',
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Gradient orb */}
-      <div style={{
-        position: 'absolute', top: '-40%', left: '50%', transform: 'translateX(-50%)',
-        width: '600px', height: '600px', borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(99,91,255,0.12) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
-
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: '700px', margin: '0 auto' }}>
-        <h2 style={{
-          fontSize: '2.75rem', fontWeight: 700, letterSpacing: '-0.025em',
-          color: 'var(--text-on-dark)', marginBottom: 'var(--space-4)', lineHeight: 1.15,
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: '780px', margin: '0 auto' }}>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'var(--primary-light)',
+          color: 'var(--primary)',
+          padding: '4px 14px',
+          borderRadius: 'var(--radius-pill)',
+          fontSize: '0.75rem',
+          fontWeight: 750,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          marginBottom: '20px'
         }}>
-          Make your company's<br />intelligence usable.
+          <Sparkles size={14} />
+          READY IN 60 SECONDS
+        </div>
+
+        <h2 style={{
+          fontSize: '3rem',
+          fontWeight: 850,
+          letterSpacing: '-0.035em',
+          color: 'var(--text-primary)',
+          marginBottom: 'var(--space-4, 16px)',
+          lineHeight: 1.15,
+        }}>
+          Make Your Company's<br />Intelligence Usable.
         </h2>
         <p style={{
-          fontSize: '1.0625rem', color: 'var(--text-on-dark-muted)',
-          maxWidth: '480px', margin: '0 auto', lineHeight: 1.6,
-          marginBottom: 'var(--space-8)',
+          fontSize: '1.125rem',
+          color: 'var(--text-secondary)',
+          maxWidth: '540px',
+          margin: '0 auto 36px',
+          lineHeight: 1.6,
         }}>
-          Stop losing knowledge to fragmentation. Start building a brain 
-          that grows with your company.
+          Stop losing context to scattered Slack threads and stale PDFs. Build an auditable knowledge graph that evolves with your team.
         </p>
-        <div style={{ display: 'flex', gap: 'var(--space-4)', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-4, 16px)', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button onClick={onEarlyAccess} style={{
-            padding: '14px 32px', background: 'var(--primary)', color: '#fff',
-            border: 'none', borderRadius: 'var(--radius-md)',
-            fontSize: '1rem', fontWeight: 650, cursor: 'pointer',
+            padding: '16px 36px',
+            background: 'var(--primary)',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '1rem',
+            fontWeight: 700,
+            cursor: 'pointer',
             fontFamily: 'var(--font-sans)',
-            display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-            boxShadow: '0 4px 16px rgba(99,91,255,0.4)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 4px 16px rgba(79, 70, 229, 0.35)',
             transition: 'all 150ms ease',
           }}>
             Get Early Access <ArrowRight size={16} />
           </button>
           <button onClick={onEarlyAccess} style={{
-            padding: '14px 32px', background: 'transparent',
-            color: 'var(--text-on-dark-muted)', border: '1px solid var(--border-dark)',
+            padding: '16px 36px',
+            background: 'var(--surface)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border)',
             borderRadius: 'var(--radius-md)',
-            fontSize: '1rem', fontWeight: 600, cursor: 'pointer',
+            fontSize: '1rem',
+            fontWeight: 650,
+            cursor: 'pointer',
             fontFamily: 'var(--font-sans)',
             transition: 'all 150ms ease',
           }}>
-            Book a Demo
+            Book a 15-Min Demo
           </button>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '18px',
+          flexWrap: 'wrap',
+          color: 'var(--text-muted)',
+          fontSize: '0.8125rem',
+          marginTop: '32px'
+        }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={15} color="#16a34a" /> 14-day free trial on Pro
+          </span>
+          <span>•</span>
+          <span>No credit card required</span>
+          <span>•</span>
+          <span>Export Neo4j graphs anytime</span>
         </div>
       </div>
     </section>

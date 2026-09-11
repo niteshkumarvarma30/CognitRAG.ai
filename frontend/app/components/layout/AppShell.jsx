@@ -6,7 +6,8 @@ import { UserButton, SignOutButton, useUser, useAuth } from '@clerk/nextjs';
 import { 
   LayoutDashboard, MessageSquare, Plug, Network, 
   Database, Shield, Settings, Bell, ChevronDown, 
-  ChevronsUpDown, Brain, Plus, LogOut, Loader2
+  ChevronsUpDown, Brain, Plus, LogOut, Loader2, Code2, Activity,
+  Building2, FileText, Menu, X
 } from 'lucide-react';
 
 export default function AppShell({ children }) {
@@ -14,10 +15,12 @@ export default function AppShell({ children }) {
   const router = useRouter();
   const { user, isLoaded } = useUser();
   const { isSignedIn } = useAuth();
-  const [workspaces, setWorkspaces] = useState([]);
-  const [activeWorkspace, setActiveWorkspace] = useState(null);
-  const [isWorkspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile sidebar on route navigation
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   // Auth guard — redirect unauthenticated users to sign-in
   useEffect(() => {
@@ -26,49 +29,122 @@ export default function AppShell({ children }) {
     }
   }, [isLoaded, isSignedIn, router]);
 
-  // In a real implementation, we would fetch from /api/v1/me here
-  // For P0.5 frontend shell, we mock the API response to demonstrate the UI
-  useEffect(() => {
-    if (isLoaded && user) {
-      // Simulate API fetch delay
-      setTimeout(() => {
-        const mockWorkspaces = [
-          { id: 'ws_1', name: 'Acme Corp', slug: 'acme', plan: 'enterprise', role: 'admin' },
-          { id: 'ws_2', name: 'Personal', slug: 'personal', plan: 'free', role: 'admin' }
-        ];
-        setWorkspaces(mockWorkspaces);
-        setActiveWorkspace(mockWorkspaces[0]);
-        setIsLoading(false);
-      }, 600);
-    }
-  }, [user, isLoaded]);
+  const allEmails = [
+    user?.primaryEmailAddress?.emailAddress,
+    ...(user?.emailAddresses?.map(e => e.emailAddress) || [])
+  ].filter(Boolean).map(e => e.toLowerCase().trim());
+  const SUPERADMIN_EMAIL = 'niteshkumarvarma5722@gmail.com';
+  const isSuperAdmin = allEmails.includes(SUPERADMIN_EMAIL.toLowerCase().trim());
+  const isAdminView = isSuperAdmin && (pathname === '/dashboard' || pathname === '/metrics' || pathname === '/settings');
 
-  const navGroups = [
-    {
-      title: 'Platform',
-      links: [
-        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { name: 'Ask Brain', href: '/ask', icon: MessageSquare },
-        { name: 'Connectors', href: '/integrations', icon: Plug },
-      ]
-    },
-    {
-      title: 'Knowledge',
-      links: [
-        { name: 'Graph Explorer', href: '/knowledge/graph', icon: Network },
-        { name: 'Library', href: '/knowledge', icon: Database },
-      ]
-    },
-    {
-      title: 'Administration',
-      links: [
-        { name: 'Security & Access', href: '/security', icon: Shield },
-        { name: 'Settings', href: '/settings', icon: Settings },
-      ]
-    }
-  ];
+  const isEnterpriseView = pathname.startsWith('/enterprise-brain');
+  const isBharatView = pathname.startsWith('/bharat-intelligence');
 
-  if (!isLoaded || isLoading) {
+  // Strict zero-crossover navigation: each persona has ONLY its own tools
+  let navGroups = [];
+  let currentPersonaInfo = {
+    name: 'Developer Code Studio',
+    tag: 'Active Environment',
+    icon: Code2,
+    color: '#6366f1',
+    bg: 'rgba(99, 102, 241, 0.12)',
+    badgeColor: '#6366f1'
+  };
+
+  if (isAdminView) {
+    currentPersonaInfo = {
+      name: 'SuperAdmin Console',
+      tag: 'Platform Governance',
+      icon: Shield,
+      color: '#8b5cf6',
+      bg: 'rgba(139, 92, 246, 0.12)',
+      badgeColor: '#8b5cf6'
+    };
+    navGroups = [
+      {
+        title: 'Admin Governance',
+        links: [
+          { name: 'Admin Command Center', href: '/dashboard', icon: LayoutDashboard },
+          { name: 'Persona Analytics', href: '/metrics', icon: Activity },
+          { name: 'Platform Settings', href: '/settings', icon: Settings },
+        ]
+      }
+    ];
+  } else if (isEnterpriseView) {
+    currentPersonaInfo = {
+      name: 'Enterprise Brain',
+      tag: 'Private Pilot',
+      icon: Building2,
+      color: '#0284c7',
+      bg: 'rgba(2, 132, 199, 0.12)',
+      badgeColor: '#0284c7'
+    };
+    navGroups = [
+      {
+        title: 'Enterprise Brain',
+        links: [
+          { name: 'Pilot Overview & Contact', href: '/enterprise-brain', icon: Building2 },
+        ]
+      },
+      {
+        title: 'Workspace',
+        links: [
+          { name: 'Settings', href: '/enterprise-brain/settings', icon: Settings },
+        ]
+      }
+    ];
+  } else if (isBharatView) {
+    currentPersonaInfo = {
+      name: 'Bharat Intelligence',
+      tag: 'Sarvam AI Pilot',
+      icon: FileText,
+      color: '#d97706',
+      bg: 'rgba(217, 119, 6, 0.12)',
+      badgeColor: '#d97706'
+    };
+    navGroups = [
+      {
+        title: 'Bharat Intelligence',
+        links: [
+          { name: 'Pilot Program & Contact', href: '/bharat-intelligence', icon: FileText },
+        ]
+      },
+      {
+        title: 'Workspace',
+        links: [
+          { name: 'Settings', href: '/bharat-intelligence/settings', icon: Settings },
+        ]
+      }
+    ];
+  } else {
+    // Standard Developer Code Studio
+    currentPersonaInfo = {
+      name: 'Developer Code Studio',
+      tag: 'Isolated Container',
+      icon: Code2,
+      color: '#6366f1',
+      bg: 'rgba(99, 102, 241, 0.12)',
+      badgeColor: '#6366f1'
+    };
+    navGroups = [
+      {
+        title: 'Developer Studio',
+        links: [
+          { name: 'Code Studio', href: '/dev-studio', icon: Code2 },
+          { name: 'AST Call Graph', href: '/knowledge/graph', icon: Network },
+          { name: 'Repository Files', href: '/knowledge', icon: Database },
+        ]
+      },
+      {
+        title: 'Workspace',
+        links: [
+          { name: 'Settings', href: '/dev-studio/settings', icon: Settings },
+        ]
+      }
+    ];
+  }
+
+  if (!isLoaded) {
     return (
       <div style={{ display: 'flex', height: '100vh', width: '100vw', justifyContent: 'center', alignItems: 'center', background: 'var(--bg)' }}>
         <Loader2 size={32} className="animate-spin" style={{ color: 'var(--primary)' }} />
@@ -77,78 +153,78 @@ export default function AppShell({ children }) {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: 'var(--bg)', position: 'relative' }}>
       
+      {/* Mobile Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div 
+          onClick={() => setMobileMenuOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 90
+          }}
+          className="mobile-only"
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <aside style={{ 
-        width: '260px', flexShrink: 0, borderRight: '1px solid var(--border)', 
-        background: 'var(--surface)', display: 'flex', flexDirection: 'column' 
-      }}>
+      <aside 
+        className={`app-sidebar ${mobileMenuOpen ? 'open' : ''}`}
+        style={{ 
+          width: '260px', flexShrink: 0, borderRight: '1px solid var(--border)', 
+          background: 'var(--surface)', display: 'flex', flexDirection: 'column',
+          zIndex: 100
+        }}
+      >
         
-        {/* Workspace Switcher */}
-        <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', position: 'relative' }}>
-          <button 
-            onClick={() => setWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
+        {/* Dedicated Persona Identity Header (Locked - Zero Persona Switching) */}
+        <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)' }}>
+          <div 
             style={{ 
-              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: 'var(--space-2) var(--space-3)', background: 'var(--surface-soft)', 
-              border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', cursor: 'pointer'
+              width: '100%', display: 'flex', alignItems: 'center',
+              padding: '8px 12px', background: 'var(--surface-soft)', 
+              border: '1px solid var(--border)', borderRadius: 'var(--radius-md)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
               <div style={{ 
-                width: 24, height: 24, borderRadius: 'var(--radius-sm)', 
-                background: 'var(--primary)', color: 'white',
-                display: 'flex', justifyContent: 'center', alignItems: 'center'
+                width: 28, height: 28, borderRadius: '6px', 
+                background: currentPersonaInfo.bg, color: currentPersonaInfo.color,
+                display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0
               }}>
-                <Brain size={14} />
+                <currentPersonaInfo.icon size={16} />
               </div>
-              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {activeWorkspace?.name || 'Select Workspace'}
-              </span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentPersonaInfo.name}
+                </div>
+                <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: currentPersonaInfo.badgeColor }}>
+                  {currentPersonaInfo.tag}
+                </div>
+              </div>
             </div>
-            <ChevronsUpDown size={14} style={{ color: 'var(--text-muted)' }} />
-          </button>
 
-          {/* Workspace Dropdown */}
-          {isWorkspaceMenuOpen && (
-            <div style={{ 
-              position: 'absolute', top: 'calc(100% - var(--space-2))', left: 'var(--space-4)', right: 'var(--space-4)', 
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', 
-              boxShadow: 'var(--shadow-lg)', zIndex: 100, padding: 'var(--space-2)', marginTop: '4px'
-            }}>
-              {workspaces.map(ws => (
-                <button 
-                  key={ws.id}
-                  onClick={() => { setActiveWorkspace(ws); setWorkspaceMenuOpen(false); }}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                    padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                    background: activeWorkspace?.id === ws.id ? 'var(--surface-soft)' : 'transparent',
-                    border: 'none', textAlign: 'left',
-                  }}
-                  onMouseOver={(e) => { if(activeWorkspace?.id !== ws.id) e.currentTarget.style.background = 'var(--surface-soft)'; }}
-                  onMouseOut={(e) => { if(activeWorkspace?.id !== ws.id) e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)', flex: 1 }}>{ws.name}</span>
-                  {activeWorkspace?.id === ws.id && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)' }} />}
-                </button>
-              ))}
-              <button 
-                onClick={() => router.push('/onboarding')}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                  padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                  background: 'transparent', border: 'none', color: 'var(--text-secondary)'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-                onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-              >
-                <Plus size={14} />
-                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Create Workspace</span>
-              </button>
-            </div>
-          )}
+            {/* Mobile Close Button */}
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="mobile-only"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px',
+                marginLeft: '8px'
+              }}
+              aria-label="Close sidebar"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
 
@@ -220,13 +296,13 @@ export default function AppShell({ children }) {
                   fontWeight: 700, 
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase', 
-                  background: activeWorkspace?.role === 'admin' ? '#eef2ff' : 'var(--surface-soft)', 
-                  color: activeWorkspace?.role === 'admin' ? '#4f46e5' : 'var(--text-secondary)', 
+                  background: isSuperAdmin ? 'rgba(99, 102, 241, 0.15)' : isEnterpriseView ? 'rgba(2, 132, 199, 0.15)' : isBharatView ? 'rgba(217, 119, 6, 0.15)' : '#eef2ff', 
+                  color: isSuperAdmin ? '#818cf8' : isEnterpriseView ? '#0284c7' : isBharatView ? '#d97706' : '#4f46e5', 
                   padding: '1px 6px', 
                   borderRadius: '4px', 
-                  border: '1px solid ' + (activeWorkspace?.role === 'admin' ? '#c7d2fe' : 'var(--border)')
+                  border: '1px solid ' + (isSuperAdmin ? 'rgba(99, 102, 241, 0.3)' : isEnterpriseView ? 'rgba(2, 132, 199, 0.3)' : isBharatView ? 'rgba(217, 119, 6, 0.3)' : '#c7d2fe')
                 }}>
-                  {activeWorkspace?.role || 'Admin'}
+                  {isSuperAdmin ? 'SuperAdmin' : isEnterpriseView ? 'Enterprise Pilot' : isBharatView ? 'Bharat Pilot' : 'Developer'}
                 </span>
                 <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {user?.primaryEmailAddress?.emailAddress}
@@ -235,7 +311,7 @@ export default function AppShell({ children }) {
             </div>
           </div>
           
-          <SignOutButton signOutOptions={{ redirectUrl: '/' }}>
+          <SignOutButton redirectUrl="/">
             <button style={{
               background: 'transparent', border: 'none', color: 'var(--text-muted)',
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -255,11 +331,39 @@ export default function AppShell({ children }) {
         <header style={{ 
           height: '64px', flexShrink: 0, borderBottom: '1px solid var(--border)', 
           background: 'var(--surface)', display: 'flex', alignItems: 'center', 
-          justifyContent: 'space-between', padding: '0 var(--space-6)'
+          justifyContent: 'space-between', padding: '0 clamp(12px, 3vw, 24px)'
         }}>
-          <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-            {/* Extremely simple breadcrumb for now */}
-            {pathname === '/dashboard' ? 'Overview' : pathname.split('/').pop().charAt(0).toUpperCase() + pathname.split('/').pop().slice(1)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Mobile Hamburger Drawer Trigger */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="mobile-only"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '6px',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              aria-label="Open navigation menu"
+            >
+              <Menu size={22} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', minWidth: 0, overflow: 'hidden' }}>
+              <span style={{ color: currentPersonaInfo.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{currentPersonaInfo.name}</span>
+              <span style={{ color: 'var(--text-muted)' }}>/</span>
+              <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {pathname === '/dashboard' ? 'Command Center' : 
+                 pathname === '/enterprise-brain' ? 'Pilot Overview' :
+                 pathname === '/bharat-intelligence' ? 'Pilot Program' :
+                 pathname === '/dev-studio' ? 'Code Studio' :
+                 pathname.split('/').pop().charAt(0).toUpperCase() + pathname.split('/').pop().slice(1)}
+              </span>
+            </div>
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
@@ -277,7 +381,14 @@ export default function AppShell({ children }) {
         </header>
 
         {/* Page Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)' }}>
+        <div style={{ 
+          flex: 1, 
+          overflow: (pathname === '/dev-studio' || pathname === '/knowledge/graph') ? 'hidden' : 'auto', 
+          padding: (pathname === '/dev-studio' || pathname === '/knowledge/graph') ? '0' : 'clamp(12px, 3vw, 24px)',
+          display: (pathname === '/dev-studio' || pathname === '/knowledge/graph') ? 'flex' : 'block',
+          flexDirection: 'column',
+          height: (pathname === '/dev-studio' || pathname === '/knowledge/graph') ? 'calc(100vh - 64px)' : 'auto'
+        }}>
           {children}
         </div>
       </main>

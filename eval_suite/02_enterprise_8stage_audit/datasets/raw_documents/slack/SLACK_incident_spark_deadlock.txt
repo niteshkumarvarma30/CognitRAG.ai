@@ -1,0 +1,10 @@
+Channel: #incident-2024-04-12-spark-deadlock
+Topic: Production Spark ETL jobs hanging at 99% across financial reconciliation pipeline
+
+[08:14:22] Priya Patel: @sre-oncall The 08:00 UTC financial ledger reconciliation job is stuck at 99% for stage 14. Executors are being killed by AWS spot replacement.
+[08:16:05] Liam Zhao: Looking now. Thread dump on driver `ip-10-0-14-112` shows `TaskSchedulerImpl.synchronized` is waiting on `DAGScheduler.lock`.
+[08:18:30] Chen Wei: That's a lock inversion! The DAGScheduler event loop was attempting to cancel the stage while the executor loss handler was updating task state.
+[08:21:10] Liam Zhao: Can we restart the driver with spot fallback disabled for now?
+[08:23:45] Chen Wei: Yes, set `spark.kubernetes.allocation.spot = false` for the financial pipeline. I'm filing Jira SPARK-45120 to fix the lock inversion in our engine fork.
+[08:45:12] Chen Wei: PR #4512 opened with the async stage abort fix. Review requested from @liamzhao.
+[09:12:00] Liam Zhao: PR #4512 merged and deployed to staging. Spot tests passing. Incident resolved.

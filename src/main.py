@@ -12,6 +12,8 @@ from src.api.ingestion_routes import router as ingestion_router
 from src.api.workspace_routes import router as workspace_router
 from src.api.security_routes import router as security_router
 from src.api.billing_routes import router as billing_router
+from src.api.code_routes import router as code_router
+from src.api.admin_routes import router as admin_router
 import os
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
@@ -45,9 +47,11 @@ app.include_router(security_router)
 app.include_router(billing_router)
 app.include_router(main_router)
 app.include_router(memory_router)
+app.include_router(ingestion_router)
 app.include_router(integration_router)
 app.include_router(semantic_router)
-app.include_router(ingestion_router)
+app.include_router(code_router)
+app.include_router(admin_router)
 
 @app.get("/health")
 def health_check():

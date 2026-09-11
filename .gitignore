@@ -18,3 +18,4 @@ cognitrag-key.pem
 .next/
 *.pyc
 *.swp
+credentials/

@@ -1,0 +1,12 @@
+GitHub Pull Request #5023: Implement OIDC Backchannel Logout (RFC 7478) with Redis revocation set
+Repo: identity / iam-keycloak-config
+Author: Kevin Miller (@kevinm)
+Reviewers: David Kim (@davidkim)
+Status: Merged (Commit: aa19234)
+Related Issues: Resolves AUTH-502
+
+Overview:
+Implements `/oauth/v2/backchannel-logout` endpoint. Intercepts Okta employee deactivation events and adds user IDs to an active revocation set in Redis with matching token expiration TTL.
+
+Validation:
+Automated test `test_backchannel_immediate_revocation` confirms API Gateway Lambda authorizer returns HTTP 401 Unauthorized within 650ms of Okta offboarding webhook receipt.

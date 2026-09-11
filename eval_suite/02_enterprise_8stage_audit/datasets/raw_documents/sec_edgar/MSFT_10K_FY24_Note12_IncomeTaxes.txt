@@ -1,0 +1,45 @@
+UNITED STATES SECURITIES AND EXCHANGE COMMISSION — FORM 10-K
+MICROSOFT CORPORATION — NOTES TO FINANCIAL STATEMENTS
+NOTE 12 — INCOME TAXES (OFFICIAL SEC EDGAR TRANSCRIPT - FY ENDED JUNE 30, 2024)
+Filing Accession: 0000950170-24-087843 | CIK: 0000789019
+
+Provision for Income Taxes:
+(In millions)
+Year Ended June 30, 2024:
+Current Taxes:
+  U.S. federal: ,165
+  U.S. state and local: ,366
+  Foreign: ,858
+Total Current Taxes: ,389
+
+Deferred Taxes:
+  U.S. federal: 4 791
+  U.S. state and local: 379
+  Foreign: 
+Total Deferred Taxes: 4 738
+
+Provision for Income Taxes: ,651
+
+Income Before Income Taxes:
+  U.S.: ,886
+  Foreign: ,901
+Total Income Before Income Taxes: ,787
+
+Effective Tax Rate Reconciliation:
+Our effective tax rate was 18.2% for fiscal year 2024, compared to 19.0% for fiscal year 2023 and 13.1% for fiscal year 2022.
+Reconciling items from the U.S. federal statutory rate of 21.0%:
+  Federal statutory rate: 21.0%
+  Foreign earnings taxed at lower rates: (1.4)% [representing -,509 million]
+  State income taxes, net of federal benefit: 1.5%
+  Foreign-derived intangible income deduction: (1.1)%
+  Research and development credit: (1.1)%
+  Excess tax benefits relating to stock-based compensation: (1.1)%
+  Interest, net: 1.1%
+  Other reconciling items, net: (0.7)%
+Effective Rate: 18.2%
+
+Foreign Operations:
+Our foreign regional operating center in Ireland, which is taxed at a rate lower than the U.S. rate, generated 83% and 81% of our foreign income before tax in fiscal years 2024 and 2023.
+
+Uncertain Tax Positions:
+As of June 30, 2024, the total gross unrecognized tax benefits were .2 billion, of which .4 billion would affect the effective tax rate if recognized.

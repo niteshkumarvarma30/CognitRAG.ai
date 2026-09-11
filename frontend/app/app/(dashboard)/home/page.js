@@ -102,7 +102,7 @@ const HomeDashboard = () => {
             <div className="flex-row" style={{ justifyContent: 'space-between' }}>
               <div>
                 <div className="metric-label" style={{ color: 'var(--text-muted)' }}><stat.icon size={16} color={stat.hex} /> {stat.label}</div>
-                <div className="metric-value">{stat.value.toLocaleString()}</div>
+                <div className="metric-value">{(stat.value ?? 0).toLocaleString()}</div>
               </div>
               <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: `${stat.hex}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <stat.icon size={24} color={stat.hex} />

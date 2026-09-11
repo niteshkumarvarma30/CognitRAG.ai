@@ -1,0 +1,24 @@
+GitHub Pull Request #3011: Preserve raw binary request body for Stripe webhook signature verification
+Repo: billing-core / payments-gateway
+Author: Michael Chang (@mchang)
+Reviewers: Sarah Jenkins (@sjenkins)
+Status: Merged (Commit: 34ec710)
+Related Issues: Resolves BILL-301
+
+Overview:
+Ensures API Gateway passes untouched raw binary bytes to FastAPI webhook handlers, preventing HMAC-SHA256 signature verification mismatches on Stripe version 2024-06-20.
+
+Diff:
+```python
+# app/routers/stripe_webhooks.py
+@router.post("/webhooks/stripe")
+async def stripe_webhook(request: Request):
+-   payload = await request.json()
+-   event = stripe.Webhook.construct_event(json.dumps(payload), sig_header, secret)
++   raw_body = await request.body()
++   sig_header = request.headers.get("stripe-signature")
++   event = stripe.Webhook.construct_event(raw_body, sig_header, secret, tolerance=300)
+```
+
+Impact:
+Webhook delivery success rate restored to 100.00%. Zero signature rejection errors in production.

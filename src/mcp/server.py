@@ -10,7 +10,7 @@ from src.semantic.ontology import get_all_definitions
 mcp = FastMCP("CognitRAG Company Brain")
 
 @mcp.tool()
-async def search_company_knowledge(query: str, tenant_id: str) -> str:
+async def search_company_knowledge(query: str, tenant_id: str, user_permissions: List[str] = None) -> str:
     """
     Search the company's internal semantic knowledge graph and SOPs.
     Use this tool to find architectural decisions, HR policies, requirements, and codebase context.
@@ -18,21 +18,26 @@ async def search_company_knowledge(query: str, tenant_id: str) -> str:
     Args:
         query: The search query to look up in the vector database.
         tenant_id: The workspace/tenant UUID.
+        user_permissions: Optional list of authorized roles or channels (e.g. ['public', 'role:engineer']).
     """
     try:
-        # We use a default system user for API/MCP programmatic access
+        from src.retrieval.hybrid import get_embedding
         user_id = "mcp_system_user" 
-        
+        if user_permissions is None:
+            user_permissions = ["public"]
+            
+        query_embedding = get_embedding(query)
         # Retrieve chunks from the hybrid semantic/keyword search
-        chunks = hybrid_retriever(tenant_id, query, top_k=5, user_id=user_id)
+        chunks, high_conf = hybrid_retriever(tenant_id, user_id, query, query_embedding, top_k=5, user_permissions=user_permissions)
         
         if not chunks:
             return "No relevant company knowledge found for this query."
             
         result_text = "### CognitRAG Search Results:\n\n"
         for chunk in chunks:
-            result_text += f"**Source**: {chunk['filename']}\n"
-            result_text += f"{chunk['content']}\n\n"
+            ref = chunk.get("parent_id", "DOC")[:10]
+            result_text += f"**Source Reference [{ref}]**:\n"
+            result_text += f"{chunk.get('content', '')}\n\n"
             
         return result_text
     except Exception as e:

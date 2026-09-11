@@ -1,28 +1,90 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
-import { FileText, X, AlertTriangle } from 'lucide-react';
+import { FileText, X, AlertTriangle, Loader2 } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
 
 export default function KnowledgeGovernancePage() {
+  const { user, isLoaded } = useUser();
   const [activeTab, setActiveTab] = useState('documents');
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const getApiBase = () => {
+    if (typeof window !== 'undefined' && window.location.hostname) {
+      return `http://${window.location.hostname}:8000`;
+    }
+    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  };
 
   // Fetch real uploaded documents from the backend
+  const fetchDocuments = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    const baseUrl = getApiBase();
+    try {
+      const primaryId = user?.id || 'ws_dev_primary';
+      const res = await fetch(`${baseUrl}/api/v1/documents/${primaryId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDocuments(Array.isArray(data) ? data : []);
+      } else {
+        setDocuments([]);
+      }
+    } catch (err) {
+      console.error('Error fetching documents:', err);
+      setDocuments([]);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (doc) => {
+    if (!doc?.id) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete "${doc.filename}"?\n\nThis will remove the file, all vector chunks from Supabase, in-memory specs, and associated Knowledge Graph nodes from Neo4j.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(doc.id);
+    const baseUrl = getApiBase();
+    try {
+      const primaryId = user?.id || 'ws_dev_primary';
+      const res = await fetch(`${baseUrl}/api/v1/documents/${primaryId}/${doc.id}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        setDocuments(prev => prev.filter(d => d.id !== doc.id));
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Failed to delete document: ${errData.detail || 'Server error'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting document:', err);
+      alert(`Network error while deleting document: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'documents') {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/documents/ws_1`)
-        .then(res => res.json())
-        .then(data => {
-          setDocuments(data);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setLoading(false);
-        });
+      fetchDocuments(true);
     }
-  }, [activeTab]);
+  }, [activeTab, user?.id, isLoaded]);
+
+  // Auto-poll in background while any document is in ingestion process
+  useEffect(() => {
+    const hasIngesting = documents.some(d => d.status === 'pending' || d.status === 'processing');
+    if (!hasIngesting) return;
+
+    const pollTimer = setInterval(() => {
+      fetchDocuments(false);
+    }, 2500);
+
+    return () => clearInterval(pollTimer);
+  }, [documents]);
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1200px' }}>
@@ -33,7 +95,9 @@ export default function KnowledgeGovernancePage() {
           <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>Review your ingested documents and verified memories.</p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <Button variant="primary">Manual Sync</Button>
+          <Button variant="primary" onClick={fetchDocuments}>
+            Manual Sync
+          </Button>
         </div>
       </div>
 
@@ -70,6 +134,25 @@ export default function KnowledgeGovernancePage() {
       {/* Content Area */}
       <div style={{ paddingTop: 'var(--space-2)' }}>
         
+        {/* Active Ingestion Pipeline Banner */}
+        {documents.some(d => d.status === 'pending' || d.status === 'processing') && (
+          <div style={{
+            marginBottom: 'var(--space-4)',
+            padding: 'var(--space-3) var(--space-4)',
+            background: 'rgba(56, 189, 248, 0.1)',
+            border: '1px solid rgba(56, 189, 248, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            color: '#38bdf8',
+            fontSize: '0.875rem'
+          }}>
+            <Loader2 size={16} className="animate-spin" />
+            <span><strong>Ingestion in Progress:</strong> Documents are actively being processed, chunked, and linked in Supabase & Neo4j. Auto-refreshing...</span>
+          </div>
+        )}
+
         {activeTab === 'documents' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {loading ? (
@@ -83,9 +166,27 @@ export default function KnowledgeGovernancePage() {
                 <Card key={doc.id} style={{ padding: 'var(--space-5)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
-                      <Badge variant={doc.status === 'completed' ? 'success' : doc.status === 'failed' ? 'error' : 'warning'} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <FileText size={12} /> {doc.status.toUpperCase()}
-                      </Badge>
+                      {doc.status === 'completed' ? (
+                        <Badge variant="success" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <FileText size={12} /> COMPLETED
+                        </Badge>
+                      ) : doc.status === 'failed' ? (
+                        <Badge variant="error" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertTriangle size={12} /> FAILED
+                        </Badge>
+                      ) : (
+                        <Badge variant="warning" style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '6px',
+                          background: 'rgba(234, 88, 12, 0.15)',
+                          color: '#ea580c',
+                          border: '1px solid rgba(234, 88, 12, 0.35)',
+                          fontWeight: 600
+                        }}>
+                          <Loader2 size={12} className="animate-spin" /> INGESTING...
+                        </Badge>
+                      )}
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Uploaded on {new Date(doc.created_at).toLocaleDateString()}</span>
                     </div>
                     <p style={{ fontSize: '0.9375rem', color: 'var(--text-primary)', fontWeight: 600 }}>
@@ -93,8 +194,22 @@ export default function KnowledgeGovernancePage() {
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--space-2)', marginLeft: 'var(--space-6)' }}>
-                    <Button variant="outline" size="sm" style={{ color: 'var(--error)', borderColor: 'var(--error)' }}>
-                      <X size={16} /> Delete
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleDeleteDocument(doc)}
+                      disabled={deletingId === doc.id}
+                      style={{ 
+                        color: 'var(--error)', 
+                        borderColor: 'var(--error)',
+                        cursor: deletingId === doc.id ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      {deletingId === doc.id ? <Loader2 size={15} className="animate-spin" /> : <X size={16} />}
+                      {deletingId === doc.id ? 'Deleting...' : 'Delete'}
                     </Button>
                   </div>
                 </Card>

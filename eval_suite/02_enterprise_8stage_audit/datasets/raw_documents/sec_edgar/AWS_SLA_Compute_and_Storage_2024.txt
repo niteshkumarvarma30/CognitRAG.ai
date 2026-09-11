@@ -1,0 +1,29 @@
+AMAZON WEB SERVICES — SERVICE LEVEL AGREEMENT (SLA)
+COVERED SERVICES: AMAZON EC2, AMAZON EBS (AMAZON COMPUTE SLA)
+OFFICIAL URL: https://aws.amazon.com/compute/sla/
+EFFECTIVE: CALENDAR YEAR 2024 / 2025
+
+Service Commitment:
+AWS will use commercially reasonable efforts to make Amazon EC2 and Amazon EBS available with a 
+Monthly Uptime Percentage of at least 99.99% during any monthly billing cycle across Multiple Availability 
+Zones within the same region (the Region-Level SLA).
+
+Region-Level Service Credits:
+Monthly Uptime Percentage                                  Service Credit Percentage
+------------------------------------------------------------------------------------
+Less than 99.99% but equal to or greater than 99.0%        10% Service Credit
+Less than 99.0% but equal to or greater than 95.0%         30% Service Credit
+Less than 95.0%                                           100% Service Credit
+====================================================================================
+
+Instance-Level Service Credits (Single EC2 Instance):
+Instance-Level Uptime Percentage                           Service Credit Percentage
+------------------------------------------------------------------------------------
+Less than 99.5% but equal to or greater than 99.0%         10% Service Credit
+Less than 99.0% but equal to or greater than 95.0%         30% Service Credit
+Less than 95.0%                                           100% Service Credit
+====================================================================================
+
+Credit Request Procedures:
+Service Credits are calculated as a percentage of the monthly bill for Amazon EC2 in the affected AWS region.
+Claims must be submitted by opening a case in the AWS Support Center by the end of the second billing cycle.

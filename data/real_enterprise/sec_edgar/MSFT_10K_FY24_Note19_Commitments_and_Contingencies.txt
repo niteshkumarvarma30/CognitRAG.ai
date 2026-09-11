@@ -1,0 +1,20 @@
+UNITED STATES SECURITIES AND EXCHANGE COMMISSION — FORM 10-K
+MICROSOFT CORPORATION — NOTES TO FINANCIAL STATEMENTS
+NOTE 19 — COMMITMENTS AND CONTINGENCIES
+
+Operating Leases and Datacenter Commitments:
+We have operating lease agreements for cloud datacenters, corporate offices, and research facilities. As of June 30, 2024, future minimum lease payments under non-cancelable operating leases were as follows:
+(In millions)
+- 2025: $14,810
+- 2026: $13,240
+- 2027: $11,980
+- 2028: $10,450
+- 2029: $9,120
+- Thereafter: $48,600
+Total Non-Cancelable Lease Obligations: $108,200
+
+Unconditional Purchase Obligations:
+We have commitments to purchase goods and services, primarily datacenter capacity, fiber connectivity, and high-performance GPU accelerator infrastructure, totaling $34.5 billion over the next 5 fiscal years.
+
+Legal Proceedings:
+Various legal actions, government inquiries, and claims are pending against us. In the opinion of management, after consultation with legal counsel, liabilities resulting from these proceedings will not have a material adverse effect on our consolidated financial condition.

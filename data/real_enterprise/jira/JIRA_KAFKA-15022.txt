@@ -1,0 +1,16 @@
+Issue Key: KAFKA-15022
+Project: Apache Kafka
+Type: Bug | Priority: Major | Status: Resolved
+Reporter: Alex Mercer (Streaming Infrastructure)
+Assignee: Dave K. (Distributed Systems)
+Components: KRaft, Controller Quorum
+
+Title: KRaft metadata log replication timeout under high partition count (>50k partitions)
+
+Description:
+In our KRaft-based staging cluster (`kafka-kraft-stage`), increasing the total partition count to 52,000 caused quorum controller heartbeat timeouts: `TimeoutException: Failed to send Raft fetch request to node 1 within 5000ms`.
+
+Controller leader node dropped out of quorum, triggering repeated controller election cycles and freezing topic creation and metadata updates.
+
+Resolution:
+Resolved in GitHub PR #1503. Increased default controller fetch timeout `controller.quorum.fetch.timeout.ms` from 2000ms to 6000ms and batched partition metadata snapshot records in 64KB buffers. Re-tested successfully with 100,000 partitions.

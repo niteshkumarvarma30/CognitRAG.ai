@@ -1,0 +1,19 @@
+GitHub Pull Request #1503: Increase KRaft controller quorum fetch timeout and batch snapshot metadata
+Repo: streaming-platform / kafka-core
+Author: Dave K. (@dave-k)
+Reviewers: Alex Mercer (@alexm)
+Status: Merged (Commit: 90a12cd)
+Related Issues: Resolves KAFKA-15022
+
+Overview:
+Increases `controller.quorum.fetch.timeout.ms` from 2,000ms to 6,000ms and optimizes Raft snapshot serialization for clusters managing >50k partitions.
+
+Configuration:
+```properties
++ controller.quorum.fetch.timeout.ms = 6000
++ controller.quorum.election.timeout.ms = 10000
++ metadata.log.segment.bytes = 67108864
+```
+
+Verification:
+Simulated 75,000 partition churn in staging. Controller leader maintained continuous quorum without dropped heartbeats.

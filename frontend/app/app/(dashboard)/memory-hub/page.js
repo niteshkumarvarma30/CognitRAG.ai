@@ -135,7 +135,7 @@ const MemoryHub = () => {
                       <div key={idx} className="timeline-item" style={{ gap: '1.5rem' }}>
                         <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#F59E0B', border: '3px solid var(--bg-base)', zIndex: 2, marginTop: '4px', boxShadow: '0 0 10px rgba(245,158,11,0.5)' }}></div>
                         <div style={{ flex: 1, padding: '1.25rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
-                          <p style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: '#F59E0B', fontWeight: '600' }}>{new Date(episode.completed_at).toLocaleString()}</p>
+                          <p style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: '#F59E0B', fontWeight: '600' }}>{episode.completed_at ? new Date(episode.completed_at).toLocaleString() : 'Recently'}</p>
                           <p style={{ fontSize: '0.95rem', lineHeight: '1.6', color: 'var(--text-main)' }}>{episode.summary}</p>
                         </div>
                       </div>

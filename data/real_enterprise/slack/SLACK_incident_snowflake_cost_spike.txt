@@ -1,0 +1,8 @@
+Channel: #incident-2024-08-14-snowflake-cost-spike
+Topic: Cloud cost anomaly alert: Snowflake compute burn rate exceeded $1,500/hour
+
+[10:15:30] David Patel: @here AWS FinOps bot flagged a $34,000 projected cost overrun on Snowflake. `ANALYTICS_WH_XL` has been running continuously for 18 hours.
+[10:17:45] Liam Zhao: Inspecting query history. A marketing user ran an unindexed `CROSS JOIN` between `user_events_365d` (2.4B rows) and `campaign_attributions`.
+[10:20:10] Liam Zhao: Terminated query `0198a21f-8890`. Why did it not timeout automatically?
+[10:22:00] David Patel: Because `STATEMENT_TIMEOUT_IN_SECONDS` is not set at the account level, and `AUTO_SUSPEND` on `ANALYTICS_WH_XL` was set to 10 minutes instead of 60 seconds!
+[10:25:30] Liam Zhao: Filed Jira INFRA-9104. Prepared PR #9105 to apply global 30-minute statement timeout and 60-second auto-suspend across all warehouses.

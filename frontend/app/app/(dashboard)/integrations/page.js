@@ -1,10 +1,14 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
-import { MessageSquare, GitBranch, FileText, Database, ShieldAlert, Loader2, Link as LinkIcon, RefreshCw, HardDrive, Cloud, X } from 'lucide-react';
+import { MessageSquare, GitBranch, FileText, Database, ShieldAlert, Loader2, Link as LinkIcon, RefreshCw, HardDrive, Cloud, X, Sparkles } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 
 export default function IntegrationsPage() {
+  const { user } = useUser();
+  const tenantId = user?.id || 'ws_1';
+
   const searchParams = useSearchParams();
   const [statusMsg, setStatusMsg] = useState(searchParams?.get('status') || null);
   const [loadingId, setLoadingId] = useState(null);
@@ -30,8 +34,8 @@ export default function IntegrationsPage() {
     setNotionModalOpen(true);
     setLoadingNotion(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`;
-      const res = await fetch(`${url}/api/v1/integrations/notion/pages?tenant_id=ws_1`);
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/integrations/notion/pages?tenant_id=${tenantId}`);
       if (res.ok) {
         const data = await res.json();
         setNotionPages(data.pages || []);
@@ -42,13 +46,45 @@ export default function IntegrationsPage() {
     setLoadingNotion(false);
   };
 
+  const fetchGdriveFiles = async () => {
+    setGdriveModalOpen(true);
+    setLoadingFiles(true);
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/integrations/google-drive/files?tenant_id=${tenantId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setGdriveFiles(data.files || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingFiles(false);
+  };
+
+  const fetchGithubRepos = async () => {
+    setGithubModalOpen(true);
+    setLoadingRepos(true);
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${url}/api/v1/integrations/github/repos?tenant_id=${tenantId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setGithubRepos(data.repos || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingRepos(false);
+  };
+
   const [activeConnections, setActiveConnections] = useState([]);
 
   useEffect(() => {
     const fetchActive = async () => {
       try {
         const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
-        const res = await fetch(`${url}/api/v1/integrations/active?tenant_id=ws_1`);
+        const res = await fetch(`${url}/api/v1/integrations/active?tenant_id=${tenantId}`);
         if (res.ok) {
           const data = await res.json();
           setActiveConnections(data.active_integrations || []);
@@ -58,7 +94,7 @@ export default function IntegrationsPage() {
       }
     };
     fetchActive();
-  }, []);
+  }, [tenantId]);
 
   const [jobProgress, setJobProgress] = useState({}); // { [connectorId]: { status, progress } }
 
@@ -72,12 +108,13 @@ export default function IntegrationsPage() {
           setJobProgress(prev => ({ ...prev, [connectorId]: data }));
           if (data.status === 'completed') {
             clearInterval(interval);
-            setSyncingState(false);
-            setModalState(false);
+            if (setSyncingState) setSyncingState(false);
+            if (setModalState) setModalState(false);
+            setActiveConnections(prev => [...new Set([...prev, connectorId])]);
             setStatusMsg('success');
           } else if (data.status === 'failed') {
             clearInterval(interval);
-            setSyncingState(false);
+            if (setSyncingState) setSyncingState(false);
             alert(`Ingestion failed: ${data.error || 'Unknown error'}`);
           }
         }
@@ -95,7 +132,7 @@ export default function IntegrationsPage() {
       const res = await fetch(`${url}/api/v1/ingest/github`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: 'ws_1', repo_names: selectedRepos })
+        body: JSON.stringify({ tenant_id: tenantId, repo_names: selectedRepos })
       });
       if (res.ok) {
         const data = await res.json();
@@ -118,7 +155,7 @@ export default function IntegrationsPage() {
       const res = await fetch(`${url}/api/v1/ingest/notion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: 'ws_1', page_ids: selectedNotion })
+        body: JSON.stringify({ tenant_id: tenantId, page_ids: selectedNotion })
       });
       if (res.ok) {
         const data = await res.json();
@@ -141,7 +178,7 @@ export default function IntegrationsPage() {
       const res = await fetch(`${url}/api/v1/ingest/gdrive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: 'ws_1', file_ids: selectedFiles })
+        body: JSON.stringify({ tenant_id: tenantId, file_ids: selectedFiles })
       });
       if (res.ok) {
         const data = await res.json();
@@ -173,7 +210,7 @@ export default function IntegrationsPage() {
     setLoadingSlack(true);
     try {
       const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
-      const res = await fetch(`${url}/api/v1/integrations/slack/channels?tenant_id=ws_1`);
+      const res = await fetch(`${url}/api/v1/integrations/slack/channels?tenant_id=${tenantId}`);
       if (res.ok) {
         const data = await res.json();
         setSlackChannels(data.channels || []);
@@ -189,7 +226,7 @@ export default function IntegrationsPage() {
     setLoadingJira(true);
     try {
       const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
-      const res = await fetch(`${url}/api/v1/integrations/jira/projects?tenant_id=ws_1`);
+      const res = await fetch(`${url}/api/v1/integrations/jira/projects?tenant_id=${tenantId}`);
       if (res.ok) {
         const data = await res.json();
         setJiraProjects(data.projects || []);
@@ -208,7 +245,7 @@ export default function IntegrationsPage() {
       const res = await fetch(`${url}/api/v1/ingest/slack`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: 'ws_1', channel_ids: selectedSlack })
+        body: JSON.stringify({ tenant_id: tenantId, channel_ids: selectedSlack })
       });
       if (res.ok) {
         const data = await res.json();
@@ -231,7 +268,7 @@ export default function IntegrationsPage() {
       const res = await fetch(`${url}/api/v1/ingest/jira`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: 'ws_1', project_keys: selectedJira })
+        body: JSON.stringify({ tenant_id: tenantId, project_keys: selectedJira })
       });
       if (res.ok) {
         const data = await res.json();
@@ -255,14 +292,15 @@ export default function IntegrationsPage() {
 
   // Hardcoded for P1.1 Demo UI
   const [enterpriseModalOpen, setEnterpriseModalOpen] = useState(false);
-  const [selectedEnterprise, setSelectedEnterprise] = useState('');
+  const [selectedEnterprise, setSelectedEnterprise] = useState(null);
+  const [demoRequested, setDemoRequested] = useState(false);
   
   const freeConnectors = [
     {
       id: 'file-upload',
       name: 'Local File Upload',
       type: 'Direct Ingestion',
-      description: 'Upload PDF, TXT, or Markdown files directly into the True Hybrid Search pipeline.',
+      description: 'Upload PDF, TXT, or Markdown files directly into your isolated True Hybrid Search pipeline (up to 20MB).',
       icon: FileText,
       color: 'var(--success)',
       status: 'disconnected',
@@ -271,10 +309,20 @@ export default function IntegrationsPage() {
     {
       id: 'google-drive',
       name: 'Google Drive',
-      type: 'Cloud Storage',
-      description: 'Sync Google Docs, Sheets, and PDFs directly from your corporate Google Workspace.',
+      type: 'Personal Cloud Storage',
+      description: 'Sync personal Google Docs, Sheets, and PDFs directly into your isolated knowledge base.',
       icon: Cloud,
       color: 'var(--info)',
+      status: 'disconnected',
+      isEnterprise: false
+    },
+    {
+      id: 'github',
+      name: 'GitHub (Personal)',
+      type: 'Code & Architecture',
+      description: 'Index docs, ADRs, READMEs, and merged PRs from up to 2 personal repositories (Free Tier).',
+      icon: GitBranch,
+      color: 'var(--text-primary)',
       status: 'disconnected',
       isEnterprise: false
     }
@@ -283,29 +331,19 @@ export default function IntegrationsPage() {
   const premiumConnectors = [
     {
       id: 'slack',
-      name: 'Slack',
-      type: 'Communication',
-      description: 'Index channel decisions, threads, and company announcements.',
+      name: 'Slack (Company)',
+      type: 'Team Communication',
+      description: 'Continuous real-time indexing of company channels, engineering decisions, and announcement threads.',
       icon: MessageSquare,
       color: 'var(--violet)',
       status: 'disconnected',
       isEnterprise: true
     },
     {
-      id: 'github',
-      name: 'GitHub',
-      type: 'Code & Architecture',
-      description: 'Sync pull requests, architectural decision records (ADRs), and markdown docs.',
-      icon: GitBranch,
-      color: 'var(--text-primary)',
-      status: 'disconnected',
-      isEnterprise: true
-    },
-    {
       id: 'jira',
-      name: 'Jira',
+      name: 'Jira (Company)',
       type: 'Project Management',
-      description: 'Index epics, tickets, and product requirements.',
+      description: 'Index sprint epics, tickets, and cross-system product requirements with automatic PR linking.',
       icon: FileText,
       color: 'var(--info)',
       status: 'disconnected',
@@ -313,28 +351,36 @@ export default function IntegrationsPage() {
     },
     {
       id: 'notion',
-      name: 'Notion',
-      type: 'Wiki & SOPs',
-      description: 'Sync company wikis, standard operating procedures, and product specs.',
+      name: 'Notion (Company)',
+      type: 'Company Wiki & SOPs',
+      description: 'Sync organizational standard operating procedures, architectural specs, and engineering wikis.',
       icon: Database,
       color: 'var(--text-primary)',
+      status: 'disconnected',
+      isEnterprise: true
+    },
+    {
+      id: 'github-enterprise',
+      name: 'GitHub Enterprise Org',
+      type: 'Enterprise Codebase',
+      description: 'Unlimited organization repositories, real-time webhook ingestion on merged PRs, and Living SOP proposals.',
+      icon: GitBranch,
+      color: 'var(--primary)',
       status: 'disconnected',
       isEnterprise: true
     }
   ];
 
-
   const handleDisconnect = async (connector) => {
     try {
       setLoadingId(connector.id);
       const url = process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`;
-      const res = await fetch(`${url}/api/v1/integrations/${connector.id}?tenant_id=ws_1`, {
+      const res = await fetch(`${url}/api/v1/integrations/${connector.id}?tenant_id=${tenantId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
-        // Remove from active connections
         setActiveConnections(activeConnections.filter(id => id !== connector.id));
-        setStatusMsg(''); // clear success msg if any
+        setStatusMsg('');
       } else {
         console.error("Failed to disconnect");
         setStatusMsg('error');
@@ -348,13 +394,6 @@ export default function IntegrationsPage() {
   };
 
   const handleConnect = (connector) => {
-    // TEMPORARILY DISABLED FOR TESTING OAUTH
-    // if (connector.isEnterprise) {
-    //   setSelectedEnterprise(connector.name);
-    //   setEnterpriseModalOpen(true);
-    //   return;
-    // }
-    
     if (connector.id === 'file-upload') {
       if (fileInputRef.current) {
         fileInputRef.current.click();
@@ -362,9 +401,16 @@ export default function IntegrationsPage() {
       return;
     }
 
+    if (connector.isEnterprise) {
+      setSelectedEnterprise(connector);
+      setDemoRequested(false);
+      setEnterpriseModalOpen(true);
+      return;
+    }
+
     // Redirect to the FastAPI auth endpoints
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`;
-    window.location.href = `${baseUrl}/api/v1/integrations/${connector.id}/auth?tenant_id=ws_1`;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+    window.location.href = `${baseUrl}/api/v1/integrations/${connector.id}/auth?tenant_id=${tenantId}`;
   };
 
   const handleFileUpload = async (e) => {
@@ -372,29 +418,42 @@ export default function IntegrationsPage() {
     if (!file) return;
 
     setLoadingId('file-upload');
+    setJobProgress(prev => ({
+      ...prev,
+      'file-upload': { status: 'processing', progress: `Reading & extracting ${file.name}...` }
+    }));
     
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('tenant_id', 'ws_1');
+      formData.append('tenant_id', tenantId);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/ingest`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const res = await fetch(`${baseUrl}/api/v1/ingest`, {
         method: 'POST',
         body: formData,
       });
 
       if (res.ok) {
-        setStatusMsg('success');
+        const data = await res.json();
+        if (data.job_id) {
+          pollJobStatus(data.job_id, 'file-upload', () => setLoadingId(null), () => {});
+        } else {
+          setStatusMsg('success');
+          setActiveConnections(prev => [...new Set([...prev, 'file-upload'])]);
+          setLoadingId(null);
+        }
       } else {
         const err = await res.json();
         console.error("Upload error:", err);
         setStatusMsg('error');
+        setLoadingId(null);
       }
     } catch (err) {
       console.error(err);
       setStatusMsg('error');
-    } finally {
       setLoadingId(null);
+    } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -402,8 +461,11 @@ export default function IntegrationsPage() {
   const renderConnectorCard = (connector) => {
     const isConnected = activeConnections.includes(connector.id);
     const connectorStatus = isConnected ? 'connected' : connector.status;
+    const progress = jobProgress[connector.id];
+    const isJobActive = progress && (progress.status === 'processing' || progress.status === 'pending');
+
     return (
-    <Card key={connector.id} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Card key={connector.id} style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
       <div style={{ padding: 'var(--space-5)', flex: 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
           <div style={{ 
@@ -415,6 +477,8 @@ export default function IntegrationsPage() {
           </div>
           {connectorStatus === 'connected' ? (
             <Badge variant="success">Connected</Badge>
+          ) : isJobActive ? (
+            <Badge variant="warning">Syncing...</Badge>
           ) : (
             <Badge variant="secondary">Not Connected</Badge>
           )}
@@ -425,7 +489,7 @@ export default function IntegrationsPage() {
             {connector.name}
           </h3>
           {connector.isEnterprise ? (
-            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--warning-light)', color: 'var(--warning)', textTransform: 'uppercase' }}>Premium</span>
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--warning-light)', color: 'var(--warning)', textTransform: 'uppercase' }}>Company</span>
           ) : (
             <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--success-light)', color: 'var(--success)', textTransform: 'uppercase' }}>Free</span>
           )}
@@ -433,9 +497,40 @@ export default function IntegrationsPage() {
         <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 'var(--space-3)' }}>
           {connector.type}
         </div>
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 'var(--space-3)' }}>
           {connector.description}
         </p>
+
+        {/* Live Ingestion Progress Bar */}
+        {isJobActive && (
+          <div style={{
+            marginTop: '12px',
+            padding: '10px 12px',
+            background: 'var(--surface-soft)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 650, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Loader2 size={12} className="animate-spin" /> Live Ingestion
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Processing</span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '8px', lineHeight: 1.3 }}>
+              {progress.progress || 'Processing chunks & graph entities...'}
+            </div>
+            <div style={{ width: '100%', height: '4px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{
+                width: '80%',
+                height: '100%',
+                background: 'linear-gradient(90deg, #635bff, #06b6d4)',
+                borderRadius: '2px',
+                animation: 'pulse 1.5s infinite'
+              }} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ 
@@ -445,9 +540,9 @@ export default function IntegrationsPage() {
         {connectorStatus === 'connected' ? (
           <>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <RefreshCw size={12} /> Sync: {connector.lastSync}
+              <RefreshCw size={12} /> Sync: Active
             </div>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -475,21 +570,39 @@ export default function IntegrationsPage() {
                  connector.id === 'github' ? 'Select Repos' : 
                  connector.id === 'notion' ? 'Select Pages' : 
                  connector.id === 'slack' ? 'Select Channels' : 
-                 connector.id === 'jira' ? 'Select Projects' : 'Configure'}
+                 connector.id === 'jira' ? 'Select Projects' : 'Upload More'}
               </Button>
             </div>
           </>
-        ) : (
+        ) : connector.id === 'file-upload' ? (
           <>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>OAuth 2.0</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Direct File • Max 20MB</div>
             <Button 
               variant="primary" 
+              size="sm" 
+              onClick={() => {
+                if (fileInputRef.current) fileInputRef.current.click();
+              }}
+              disabled={loadingId === 'file-upload' || isJobActive}
+              style={{ padding: '4px 14px', height: 'auto', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              {loadingId === 'file-upload' || isJobActive ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />}
+              Upload File
+            </Button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              {connector.isEnterprise ? 'Company Brain' : 'OAuth 2.0'}
+            </div>
+            <Button 
+              variant={connector.isEnterprise ? "outline" : "primary"}
               size="sm" 
               onClick={() => handleConnect(connector)}
               disabled={loadingId === connector.id}
               style={{ padding: '4px 12px', height: 'auto', fontSize: '0.75rem' }}
             >
-              {loadingId === connector.id ? <Loader2 size={14} className="animate-spin" /> : 'Connect'}
+              {loadingId === connector.id ? <Loader2 size={14} className="animate-spin" /> : connector.isEnterprise ? 'Explore' : 'Connect'}
             </Button>
           </>
         )}
@@ -502,19 +615,21 @@ export default function IntegrationsPage() {
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1000px' }}>
       
       <div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 650, color: 'var(--text-primary)' }}>Connectors</h1>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>Connect external tools to build your semantic knowledge graph.</p>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 650, color: 'var(--text-primary)' }}>Knowledge Connectors</h1>
+        <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
+          Connect tools and ingest data into your isolated semantic knowledge graph. All documents and entities are isolated by your tenant ID.
+        </p>
       </div>
 
       {statusMsg === 'success' && (
         <div style={{ padding: 'var(--space-4)', background: 'var(--success-light)', color: 'var(--success)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(22, 163, 74, 0.2)' }}>
-          Integration connected successfully! We are now syncing your data.
+          Sync completed successfully! Documents and graph entities are now live in your workspace.
         </div>
       )}
 
       {statusMsg === 'error' && (
         <div style={{ padding: 'var(--space-4)', background: 'var(--error-light)', color: 'var(--error)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(220, 38, 38, 0.2)' }}>
-          Failed to connect integration. Please try again.
+          Failed to process request. Please try again.
         </div>
       )}
 
@@ -531,9 +646,14 @@ export default function IntegrationsPage() {
         
         {/* Free Connectors Section */}
         <div>
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 650, color: 'var(--text-primary)', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
-            Free Connectors
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+            <h2 style={{ fontSize: '1.125rem', fontWeight: 650, color: 'var(--text-primary)' }}>
+              Individual / Free Tier Connectors
+            </h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 650, background: 'var(--success-light)', padding: '2px 8px', borderRadius: '12px' }}>
+              Included For All Users
+            </span>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
             {freeConnectors.map(renderConnectorCard)}
           </div>
@@ -541,10 +661,15 @@ export default function IntegrationsPage() {
 
         {/* Premium Connectors Section */}
         <div>
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 650, color: 'var(--text-primary)', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            Premium Connectors
-            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--warning-light)', color: 'var(--warning)', textTransform: 'uppercase' }}>PRO</span>
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+            <h2 style={{ fontSize: '1.125rem', fontWeight: 650, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              Company Brain Connectors
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', background: 'var(--warning-light)', color: 'var(--warning)', textTransform: 'uppercase' }}>Enterprise</span>
+            </h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Multi-seat • Cryptographic Isolation • Living SOPs
+            </span>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
             {premiumConnectors.map(renderConnectorCard)}
           </div>
@@ -554,30 +679,79 @@ export default function IntegrationsPage() {
 
       {/* Enterprise Upgrade Modal */}
       {enterpriseModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
-          <div className="animate-scale-up" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', maxWidth: '400px', width: '100%', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-4)' }}>
-              <div style={{ background: 'var(--warning-light)', color: 'var(--warning)', padding: '12px', borderRadius: '50%' }}>
-                <ShieldAlert size={28} />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', padding: '20px' }}>
+          <div className="animate-scale-up" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', maxWidth: '480px', width: '100%', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'var(--warning-light)', color: 'var(--warning)', padding: '4px 12px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700 }}>
+                <Sparkles size={13} />
+                COMPANY BRAIN SUITE
+              </div>
+              <button 
+                onClick={() => setEnterpriseModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 'var(--space-2)' }}>
+              Unlock {selectedEnterprise?.name || 'Company Connector'}
+            </h3>
+            
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: 'var(--space-5)', lineHeight: 1.5 }}>
+              Company-tier connectors unify organization-wide communication, sprint boards, and wikis into an autonomous living graph with full role-based access control.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--surface-soft)', padding: '12px 14px', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-6)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: 'var(--success)' }}>✓</span> Complete cryptographic tenant data isolation
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: 'var(--success)' }}>✓</span> Automated Living SOP generation on merged PRs & threads
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: 'var(--success)' }}>✓</span> Unlimited team members and cross-platform query traces
               </div>
             </div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 650, color: 'var(--text-primary)', textAlign: 'center', marginBottom: 'var(--space-2)' }}>
-              Premium Integration
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', textAlign: 'center', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
-              The <strong>{selectedEnterprise}</strong> connector requires a Premium license to securely sync organization data.
-            </p>
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <Button variant="outline" style={{ flex: 1 }} onClick={() => setEnterpriseModalOpen(false)}>Cancel</Button>
-              <Button variant="primary" style={{ flex: 1 }} onClick={() => setEnterpriseModalOpen(false)}>Upgrade Plan</Button>
-            </div>
+
+            {demoRequested ? (
+              <div style={{ padding: '12px', background: 'var(--success-light)', color: 'var(--success)', borderRadius: 'var(--radius-md)', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
+                🎉 Request received! Our founding team will reach out within 24 hours.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                  <Button variant="outline" style={{ flex: 1 }} onClick={() => setEnterpriseModalOpen(false)}>Close</Button>
+                  <Button variant="primary" style={{ flex: 1 }} onClick={() => setDemoRequested(true)}>Request Access</Button>
+                </div>
+                
+                {/* Developer/Investor Sandbox Test Mode */}
+                <button
+                  onClick={() => {
+                    setEnterpriseModalOpen(false);
+                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+                    const targetId = selectedEnterprise?.id === 'github-enterprise' ? 'github' : selectedEnterprise?.id;
+                    window.location.href = `${baseUrl}/api/v1/integrations/${targetId}/auth?tenant_id=${tenantId}`;
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--primary)',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    textAlign: 'center',
+                    padding: '4px'
+                  }}
+                >
+                  (Or click here to test sandbox connection directly)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-
-      
-      
       {/* Notion Page Picker Modal */}
       {notionModalOpen && (
         <div style={{

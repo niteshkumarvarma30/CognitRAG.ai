@@ -20,6 +20,9 @@ import {
   FAQSection,
   FinalCTA,
   Footer,
+  GroundedScenariosSection,
+  PersonaShowcaseSection,
+  PersonaSelectionModal,
 } from '@/components/marketing';
 import NeuralGraphBackground from '@/components/marketing/NeuralGraphBackground';
 import EarlyAccessModal from '@/components/marketing/EarlyAccessModal';
@@ -29,13 +32,23 @@ import { useEffect } from 'react';
 
 export default function LandingPage() {
   const [earlyAccessOpen, setEarlyAccessOpen] = useState(false);
+  const [personaModalOpen, setPersonaModalOpen] = useState(false);
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
 
-  // Redirect logged-in users to dashboard
+  // Redirect logged-in users to their dedicated persona dashboard
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      router.replace('/dashboard');
+      const storedPersona = typeof window !== 'undefined' ? localStorage.getItem('cognitrag_persona') : null;
+      if (storedPersona === 'superadmin') {
+        router.replace('/dashboard');
+      } else if (storedPersona === 'company_brain' || storedPersona === 'enterprise_brain') {
+        router.replace('/enterprise-brain');
+      } else if (storedPersona === 'bharat_intelligence') {
+        router.replace('/bharat-intelligence');
+      } else {
+        router.replace('/dev-studio');
+      }
     }
   }, [isLoaded, isSignedIn, router]);
 
@@ -46,8 +59,13 @@ export default function LandingPage() {
       <NeuralGraphBackground />
       <GlobalNav onEarlyAccess={() => setEarlyAccessOpen(true)} />
 
-      <HeroSection onEarlyAccess={() => setEarlyAccessOpen(true)} />
+      <HeroSection 
+        onEarlyAccess={() => setEarlyAccessOpen(true)} 
+        onGetStarted={() => setPersonaModalOpen(true)} 
+      />
       <TrustStrip />
+      <PersonaShowcaseSection />
+      <GroundedScenariosSection />
       <ProblemSection />
       <CompanyBrainSection />
       <HowItWorksSection />
@@ -65,6 +83,7 @@ export default function LandingPage() {
       <Footer />
 
       <EarlyAccessModal isOpen={earlyAccessOpen} onClose={() => setEarlyAccessOpen(false)} />
+      <PersonaSelectionModal isOpen={personaModalOpen} onClose={() => setPersonaModalOpen(false)} />
     </div>
   );
 }

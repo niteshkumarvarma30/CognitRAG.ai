@@ -1,0 +1,17 @@
+Issue Key: BILL-302
+Project: Enterprise Billing & Payments
+Type: Improvement | Priority: Major | Status: Resolved
+Reporter: Michael Chang (FinTech Transaction Core)
+Assignee: David Patel (FinOps / Infrastructure)
+Components: TaxJar, Checkout Flow, Redis
+
+Title: Implement Redis caching layer for TaxJar postal code sales tax calculations
+
+Description:
+Checkout conversion dropped 4.2% due to high checkout button latency (p99 > 3.8 seconds). Profile logs revealed 85% of checkout latency was spent calling external TaxJar REST API endpoints (`/v2/taxes`) synchronously for every line-item state tax calculation.
+
+Resolution:
+Resolved in GitHub PR #3022. Introduced a two-tier Redis cache in VPC MemoryDB:
+1) Key: `taxjar:rate:{country}:{postal_code}:{jurisdiction_hash}`
+2) TTL: 24 hours (with automated daily invalidation cron).
+Cache hit ratio reached 94.6% in production, reducing checkout API latency from 3.8s to 120ms.

@@ -1,0 +1,24 @@
+UNITED STATES SECURITIES AND EXCHANGE COMMISSION — FORM 10-K
+MICROSOFT CORPORATION — NOTES TO FINANCIAL STATEMENTS
+NOTE 3 — CASH, CASH EQUIVALENTS, AND INVESTMENTS
+
+Investment Holdings and Fair Value Measurements:
+(In millions)
+As of June 30, 2024:
+- Cash and Cash Equivalents: $18,296
+- Mutual Funds and Equities: $6,840
+- Commercial Paper: $4,215
+- Certificates of Deposit: $3,110
+- U.S. Government and Agency Securities: $58,920
+- Foreign Government Bonds: $11,450
+- Mortgage-backed and Asset-backed Securities: $5,420
+- Corporate Notes and Bonds: $14,230
+
+Total Cash, Cash Equivalents, and Short-Term Investments: $122,481
+
+Fair Value Hierarchy:
+- Level 1 (Quoted prices in active markets): $25,136
+- Level 2 (Observable market inputs, including matrix pricing): $97,345
+- Level 3 (Unobservable valuation inputs): $0
+
+All asset-backed securities are investment grade with credit ratings of AAA/Aaa from major rating agencies. Realized gains and losses were immaterial during the fiscal years presented.

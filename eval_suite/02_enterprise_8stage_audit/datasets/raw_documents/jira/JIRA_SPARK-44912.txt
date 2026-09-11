@@ -1,0 +1,19 @@
+Issue Key: SPARK-44912
+Project: Apache Spark SQL
+Type: Improvement | Priority: Major | Status: Resolved
+Reporter: Priya Patel (Lead Data Architect)
+Assignee: Elena Rostova (Data Infrastructure)
+Components: Catalyst Optimizer, Adaptive Query Execution (AQE)
+
+Title: Optimize AQE skewed partition factor for wide dimensional joins
+
+Description:
+In multi-tenant data warehouse aggregation queries, certain high-volume merchant IDs cause severe shuffle data skew. A single partition processes 45 GB while remaining partitions process ~128 MB. 
+
+Under the default configuration (`spark.sql.adaptive.skewJoin.skewedPartitionFactor = 5.0`), the Catalyst optimizer fails to split the skewed partition because median partition size is kept artificially low by empty partitions from selective pushdown filters.
+
+Resolution:
+Resolved in GitHub PR #4493. Adjusted dynamic skew detection threshold:
+1) Set `spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes` to 256MB.
+2) Introduced `spark.sql.adaptive.skewJoin.skewedPartitionFactor = 2.5`.
+3) Added automatic partition splitting into 128MB uniform sub-partitions. Production p95 query latency reduced from 42 minutes to 3.8 minutes.

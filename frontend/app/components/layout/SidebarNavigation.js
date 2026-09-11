@@ -13,7 +13,8 @@ import {
   Terminal,
   Activity,
   Receipt,
-  Book
+  Book,
+  Shield
 } from 'lucide-react';
 import { UserButton, useUser } from '@clerk/nextjs';
 
@@ -48,16 +49,19 @@ const SidebarNavigation = () => {
 
       <div className="nav-section">
         <div className="nav-label">Intelligence</div>
+        <Link href="/ask" className={`nav-link ${isActive('/ask')}`}>
+          <Brain size={18} /> Ask Brain
+        </Link>
         <Link href="/memory-hub" className={`nav-link ${isActive('/memory-hub')}`}>
           <Brain size={18} /> Memory Hub
         </Link>
         <Link href="/semantic-dictionary" className={`nav-link ${isActive('/semantic-dictionary')}`}>
           <Book size={18} /> Semantic Dictionary
         </Link>
-        <Link href="/knowledge-vault" className={`nav-link ${isActive('/knowledge-vault')}`}>
-          <Database size={18} /> Knowledge Vault
+        <Link href="/knowledge" className={`nav-link ${isActive('/knowledge')}`}>
+          <Database size={18} /> Knowledge Library
         </Link>
-        <Link href="/graph-explorer" className={`nav-link ${isActive('/graph-explorer')}`}>
+        <Link href="/knowledge/graph" className={`nav-link ${isActive('/knowledge/graph')}`}>
           <Network size={18} /> Graph Explorer
         </Link>
         <Link href="/timeline" className={`nav-link ${isActive('/timeline')}`}>
@@ -70,8 +74,14 @@ const SidebarNavigation = () => {
         <Link href="/playground" className={`nav-link ${isActive('/playground')}`}>
           <Terminal size={18} /> AI Playground
         </Link>
+        <Link href="/ai/mcp" className={`nav-link ${isActive('/ai/mcp')}`}>
+          <Terminal size={18} /> Model Context Protocol (MCP)
+        </Link>
         <Link href="/integrations" className={`nav-link ${isActive('/integrations')}`}>
           <Puzzle size={18} /> Integrations
+        </Link>
+        <Link href="/security" className={`nav-link ${isActive('/security')}`}>
+          <Shield size={18} /> Security & Access
         </Link>
         <Link href="/settings" className={`nav-link ${isActive('/settings')}`}>
           <Settings size={18} /> Control Center

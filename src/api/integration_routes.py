@@ -3,6 +3,7 @@ import requests
 import base64
 import io
 import zipfile
+from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import RedirectResponse
@@ -91,14 +92,20 @@ async def notion_callback(code: str, state: str):
     return RedirectResponse(f"{FRONTEND_URL}/integrations?status=success")
 
 @router.get("/api/v1/integrations/github/auth")
-async def github_auth(tenant_id: str):
+async def github_auth(tenant_id: str, redirect_to: Optional[str] = None):
     """Redirects the user to the GitHub OAuth approval screen."""
     if not GITHUB_CLIENT_ID:
         raise HTTPException(status_code=500, detail="GitHub Client ID not configured in .env")
     
+    state_param = tenant_id
+    if redirect_to:
+        state_param = f"{tenant_id}__dest__{redirect_to}"
+    elif tenant_id.startswith("ws_dev"):
+        state_param = f"{tenant_id}__dest__dev_studio"
+
     auth_url = (
         f"https://github.com/login/oauth/authorize?"
-        f"client_id={GITHUB_CLIENT_ID}&scope=repo&state={tenant_id}"
+        f"client_id={GITHUB_CLIENT_ID}&scope=repo&state={state_param}"
         f"&redirect_uri={GITHUB_REDIRECT_URI}"
     )
     return RedirectResponse(auth_url)
@@ -109,7 +116,14 @@ async def github_callback(code: str, state: str):
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
         
+    destination = "integrations"
     tenant_id = state
+    if "__dest__" in state:
+        parts = state.split("__dest__")
+        tenant_id = parts[0]
+        destination = parts[1]
+    elif tenant_id.startswith("ws_dev") or "dev_studio" in state:
+        destination = "dev_studio"
     
     response = requests.post(
         "https://github.com/login/oauth/access_token",
@@ -126,6 +140,8 @@ async def github_callback(code: str, state: str):
     
     if response.status_code != 200:
         print("GitHub Auth Error:", response.text)
+        if destination == "dev_studio":
+            return RedirectResponse(f"{FRONTEND_URL}/dev-studio?github=error")
         return RedirectResponse(f"{FRONTEND_URL}/integrations?status=error")
         
     data = response.json()
@@ -133,6 +149,8 @@ async def github_callback(code: str, state: str):
     
     if not access_token:
         print("No access token in GitHub response:", data)
+        if destination == "dev_studio":
+            return RedirectResponse(f"{FRONTEND_URL}/dev-studio?github=error")
         return RedirectResponse(f"{FRONTEND_URL}/integrations?status=error")
         
     admin_db = supabase_manager.get_admin_client()
@@ -151,7 +169,29 @@ async def github_callback(code: str, state: str):
         "access_token": access_token,
         "workspace_name": "GitHub Account"
     }, on_conflict="tenant_id, integration_type").execute()
+
+    # Sync to code_routes in-memory cache if applicable
+    try:
+        from src.api.code_routes import github_connections
+        gh_user_resp = requests.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github.v3+json"},
+            timeout=10
+        )
+        if gh_user_resp.status_code == 200:
+            gh_user = gh_user_resp.json()
+            github_connections[tenant_id] = {
+                "token": access_token,
+                "username": gh_user.get("login"),
+                "name": gh_user.get("name") or gh_user.get("login"),
+                "avatar_url": gh_user.get("avatar_url"),
+                "connected_at": "Just now"
+            }
+    except Exception as e:
+        print("Could not cache github_connections in memory:", e)
     
+    if destination == "dev_studio" or tenant_id.startswith("ws_dev"):
+        return RedirectResponse(f"{FRONTEND_URL}/dev-studio?github=connected")
     return RedirectResponse(f"{FRONTEND_URL}/integrations?status=success")
 
 @router.get("/api/v1/integrations/github/repos")

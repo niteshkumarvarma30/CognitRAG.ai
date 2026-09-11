@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 import asyncio
 import io
 import zipfile
@@ -13,8 +13,7 @@ from src.ingestion.pipeline import run_ingestion_pipeline
 
 router = APIRouter()
 
-# In-memory job tracker for real-time frontend polling
-ingestion_jobs = {}
+from src.api.job_tracker import ingestion_jobs
 
 class IngestGDriveRequest(BaseModel):
     tenant_id: str
@@ -110,21 +109,47 @@ def run_github_sync_task(job_id: str, tenant_id: str, repo_names: List[str]):
         ingestion_jobs[job_id]["status"] = "processing"
         
         for idx, repo_full in enumerate(repo_names, 1):
-            ingestion_jobs[job_id]["progress"] = f"Cloning & parsing repo {repo_full} ({idx}/{len(repo_names)})..."
+            ingestion_jobs[job_id]["progress"] = f"Cloning & scanning {repo_full} ({idx}/{len(repo_names)})..."
             zip_resp = requests.get(f"https://api.github.com/repos/{repo_full}/zipball", headers=headers, stream=True)
             if zip_resp.status_code != 200:
+                print(f"Failed to fetch zipball for {repo_full}: {zip_resp.status_code}")
                 continue
                 
+            ingested_files_count = 0
+            MAX_FILES_PER_REPO = 50  # Protect Bedrock/Titan model rate limits
+
             with zipfile.ZipFile(io.BytesIO(zip_resp.content)) as z:
+                # Prioritized file scanning for documentation, ADRs, and schemas
                 for file_info in z.infolist():
-                    if file_info.is_dir() or not (file_info.filename.endswith(".md") or file_info.filename.endswith(".txt")):
+                    if ingested_files_count >= MAX_FILES_PER_REPO:
+                        break
+
+                    path_lower = file_info.filename.lower()
+                    
+                    # 1. Strictly ignore build, dependencies, and lockfiles
+                    if any(ignored in path_lower for ignored in [
+                        '/node_modules/', '/vendor/', '/dist/', '/build/', '/.next/',
+                        '/.git/', '/__pycache__/', 'package-lock.json', 'yarn.lock',
+                        'poetry.lock', 'cargo.lock', '/__snapshots__/'
+                    ]):
                         continue
+
+                    # 2. Filter for Golden Knowledge Assets: Docs, ADRs, READMEs, Schemas
+                    is_doc = path_lower.endswith(('.md', '.txt'))
+                    is_schema = any(s in path_lower for s in ['openapi', 'swagger', 'schema.graphql']) and path_lower.endswith(('.yaml', '.yml', '.json'))
+                    is_adr = ('/adr/' in path_lower or '/decisions/' in path_lower) and path_lower.endswith(('.md', '.txt'))
+
+                    if not (is_doc or is_schema or is_adr):
+                        continue
+
                     if file_info.file_size > 1_000_000:
                         continue
                         
                     file_bytes = z.read(file_info.filename)
                     clean_filename = f"github/{repo_full}/{file_info.filename.split('/', 1)[-1]}"
                     
+                    ingestion_jobs[job_id]["progress"] = f"Ingesting {clean_filename.split('/')[-1]} ({ingested_files_count+1}/{MAX_FILES_PER_REPO})..."
+
                     doc_res = db.table("documents").insert({
                         "tenant_id": uuid_tenant,
                         "filename": clean_filename,
@@ -134,9 +159,10 @@ def run_github_sync_task(job_id: str, tenant_id: str, repo_names: List[str]):
                     if doc_res.data:
                         doc_id = doc_res.data[0]["id"]
                         background_ingestion_pipeline(uuid_tenant, doc_id, file_bytes, clean_filename)
+                        ingested_files_count += 1
                         
         ingestion_jobs[job_id]["status"] = "completed"
-        ingestion_jobs[job_id]["progress"] = f"Successfully ingested {len(repo_names)} GitHub repositories into Supabase!"
+        ingestion_jobs[job_id]["progress"] = f"Successfully synced GitHub documentation and architecture decisions!"
     except Exception as e:
         ingestion_jobs[job_id]["status"] = "failed"
         ingestion_jobs[job_id]["error"] = str(e)

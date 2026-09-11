@@ -18,15 +18,53 @@ const MOCK_RESPONSES = {
       { type: 'slack', ref: '#engineering', label: 'Slack' },
     ],
     confidence: 'high',
+    verifiedCount: '3 sources verified',
+  },
+  1: {
+    answer: 'Customer ACME is encountering retry timeouts on their webhook receiver. During Tuesday\'s DB migration, 504 Gateway Timeouts caused a webhook delivery backlog. Per support ticket SUP-404, switching ACME to idempotent exponential backoff and clearing the dead-letter queue completely resolved the issue.',
+    sources: [
+      { type: 'jira', ref: 'SUP-404', label: 'Jira' },
+      { type: 'confluence', ref: 'Webhook Architecture & Retries', label: 'Confluence' },
+      { type: 'slack', ref: '#customer-success', label: 'Slack' },
+    ],
+    confidence: 'high',
+    verifiedCount: '3 sources verified',
+  },
+  2: {
+    answer: 'Per Operations SOP v4.1 (ratified last month), Tier-2 support agents are authorized to issue immediate refunds up to $500 within 30 days of initial purchase. Any refund request exceeding $500 or submitted past 30 days requires documented approval from the Finance Operations Lead.',
+    sources: [
+      { type: 'notion', ref: 'Finance & Refund Policy v4.1', label: 'Notion' },
+      { type: 'policy', ref: 'SOP-REF-04', label: 'Policy' },
+      { type: 'slack', ref: '#ops-announcements', label: 'Slack' },
+    ],
+    confidence: 'high',
+    verifiedCount: '3 sources verified',
+  },
+  3: {
+    answer: 'The transition from the monolith to microservices was authored by VP of Engineering Marcus Vance in Architecture Decision Record ADR-014 (Q3 2024). The decision was formally approved by the Architecture Review Board following three cascading deployment failures in the monolithic payment pipeline.',
+    sources: [
+      { type: 'github', ref: 'ADR-014-microservices.md', label: 'GitHub' },
+      { type: 'notion', ref: '2024 Tech Strategy & Roadmap', label: 'Notion' },
+      { type: 'slack', ref: '#architecture-council', label: 'Slack' },
+    ],
+    confidence: 'high',
+    verifiedCount: '3 sources verified',
   },
 };
 
 export default function AskBrainDemo() {
   const [selectedQuery, setSelectedQuery] = useState(0);
   const [showAnswer, setShowAnswer] = useState(true);
-  const response = MOCK_RESPONSES[0];
+  const response = MOCK_RESPONSES[selectedQuery] || MOCK_RESPONSES[0];
 
-  const sourceColors = { jira: 'var(--info)', github: 'var(--success)', slack: 'var(--violet)' };
+  const sourceColors = {
+    jira: 'var(--info)',
+    github: 'var(--success)',
+    slack: 'var(--violet)',
+    confluence: 'var(--primary)',
+    notion: 'var(--warning)',
+    policy: 'var(--success)',
+  };
 
   return (
     <section style={{ padding: 'var(--space-24) var(--space-6)', background: 'var(--surface)' }}>
@@ -99,7 +137,7 @@ export default function AskBrainDemo() {
                   width: 6, height: 6, borderRadius: '50%', background: 'var(--success)',
                 }} />
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  3 sources verified
+                  {response.verifiedCount || `${response.sources?.length || 0} sources verified`}
                 </span>
               </div>
 
