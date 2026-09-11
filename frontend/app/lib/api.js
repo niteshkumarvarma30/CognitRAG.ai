@@ -3,20 +3,15 @@
  * Works seamlessly on localhost (dev/test) and AWS EC2 / production environments.
  */
 export const getApiUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
-    const protocol = window.location.protocol;
-    const port = window.location.port;
-    if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      // If accessed via production domain (standard port 80/443 or no port specified)
-      if (!port || port === '80' || port === '443') {
-        return `${protocol}//${host}`;
-      }
-      return `${protocol}//${host}:8000`;
+    // On local development, point to local python uvicorn
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     }
+    // In production (cognitrag.com, www.cognitrag.com, or EC2):
+    // Use the current origin (https://cognitrag.com) so all /api requests are secure and reverse-proxied by Nginx
+    return window.location.origin;
   }
-  return 'http://localhost:8000';
+  return process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:8000';
 };

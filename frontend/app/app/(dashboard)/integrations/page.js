@@ -1,3 +1,4 @@
+import { getApiUrl } from '@/lib/api';
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
@@ -34,7 +35,7 @@ export default function IntegrationsPage() {
     setNotionModalOpen(true);
     setLoadingNotion(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/integrations/notion/pages?tenant_id=${tenantId}`);
       if (res.ok) {
         const data = await res.json();
@@ -50,7 +51,7 @@ export default function IntegrationsPage() {
     setGdriveModalOpen(true);
     setLoadingFiles(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/integrations/google-drive/files?tenant_id=${tenantId}`);
       if (res.ok) {
         const data = await res.json();
@@ -66,7 +67,7 @@ export default function IntegrationsPage() {
     setGithubModalOpen(true);
     setLoadingRepos(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/integrations/github/repos?tenant_id=${tenantId}`);
       if (res.ok) {
         const data = await res.json();
@@ -83,7 +84,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     const fetchActive = async () => {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+        const url = getApiUrl();
         const res = await fetch(`${url}/api/v1/integrations/active?tenant_id=${tenantId}`);
         if (res.ok) {
           const data = await res.json();
@@ -99,7 +100,7 @@ export default function IntegrationsPage() {
   const [jobProgress, setJobProgress] = useState({}); // { [connectorId]: { status, progress } }
 
   const pollJobStatus = async (jobId, connectorId, setSyncingState, setModalState) => {
-    const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+    const url = getApiUrl();
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`${url}/api/v1/ingest/status/${jobId}`);
@@ -128,7 +129,7 @@ export default function IntegrationsPage() {
     if (selectedRepos.length === 0) return;
     setSyncingGithub(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/ingest/github`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -151,7 +152,7 @@ export default function IntegrationsPage() {
     if (selectedNotion.length === 0) return;
     setSyncingNotion(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/ingest/notion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -174,7 +175,7 @@ export default function IntegrationsPage() {
     if (selectedFiles.length === 0) return;
     setSyncing(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/ingest/gdrive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -209,7 +210,7 @@ export default function IntegrationsPage() {
     setSlackModalOpen(true);
     setLoadingSlack(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/integrations/slack/channels?tenant_id=${tenantId}`);
       if (res.ok) {
         const data = await res.json();
@@ -225,7 +226,7 @@ export default function IntegrationsPage() {
     setJiraModalOpen(true);
     setLoadingJira(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/integrations/jira/projects?tenant_id=${tenantId}`);
       if (res.ok) {
         const data = await res.json();
@@ -241,7 +242,7 @@ export default function IntegrationsPage() {
     if (selectedSlack.length === 0) return;
     setSyncingSlack(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/ingest/slack`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -264,7 +265,7 @@ export default function IntegrationsPage() {
     if (selectedJira.length === 0) return;
     setSyncingJira(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/ingest/jira`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -374,7 +375,7 @@ export default function IntegrationsPage() {
   const handleDisconnect = async (connector) => {
     try {
       setLoadingId(connector.id);
-      const url = process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`;
+      const url = getApiUrl();
       const res = await fetch(`${url}/api/v1/integrations/${connector.id}?tenant_id=${tenantId}`, {
         method: 'DELETE',
       });
@@ -409,7 +410,7 @@ export default function IntegrationsPage() {
     }
 
     // Redirect to the FastAPI auth endpoints
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+    const baseUrl = getApiUrl();
     window.location.href = `${baseUrl}/api/v1/integrations/${connector.id}/auth?tenant_id=${tenantId}`;
   };
 
@@ -428,7 +429,7 @@ export default function IntegrationsPage() {
       formData.append('file', file);
       formData.append('tenant_id', tenantId);
 
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+      const baseUrl = getApiUrl();
       const res = await fetch(`${baseUrl}/api/v1/ingest`, {
         method: 'POST',
         body: formData,
@@ -729,7 +730,7 @@ export default function IntegrationsPage() {
                 <button
                   onClick={() => {
                     setEnterpriseModalOpen(false);
-                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+                    const baseUrl = getApiUrl();
                     const targetId = selectedEnterprise?.id === 'github-enterprise' ? 'github' : selectedEnterprise?.id;
                     window.location.href = `${baseUrl}/api/v1/integrations/${targetId}/auth?tenant_id=${tenantId}`;
                   }}

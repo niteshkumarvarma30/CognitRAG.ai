@@ -6,15 +6,9 @@ import { Button, Input, Card, Badge, Skeleton } from '@/components/ui';
 import SourceReceipt from './SourceReceipt';
 import ConfidenceBreakdown from './ConfidenceBreakdown';
 
-const getApiBase = () => {
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      return `http://${host}:8000/api/v1`;
-    }
-  }
-  return '/api/v1';
-};
+import { getApiUrl } from '@/lib/api';
+
+const getApiBase = () => `${getApiUrl()}/api/v1`;
 
 
 export default function Chat({ tenantId }) {

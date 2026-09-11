@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
 import { FileText, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
+import { getApiUrl } from '@/lib/api';
 
 export default function KnowledgeGovernancePage() {
   const { user, isLoaded } = useUser();
@@ -11,12 +12,7 @@ export default function KnowledgeGovernancePage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
 
-  const getApiBase = () => {
-    if (typeof window !== 'undefined' && window.location.hostname) {
-      return `http://${window.location.hostname}:8000`;
-    }
-    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  };
+  const getApiBase = () => getApiUrl();
 
   // Fetch real uploaded documents from the backend
   const fetchDocuments = async (showLoading = true) => {

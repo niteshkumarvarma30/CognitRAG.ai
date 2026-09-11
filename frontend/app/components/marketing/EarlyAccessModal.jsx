@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import { X, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+import { getApiUrl } from '@/lib/api';
 
 const ROLES = ['Engineering', 'Product', 'Operations', 'Customer Support', 'AI / ML', 'Founder / Leadership', 'Other'];
 const SIZES = ['1–10', '11–50', '51–200', '201–500', '500+'];
@@ -20,7 +21,7 @@ export default function EarlyAccessModal({ isOpen, onClose }) {
     setLoading(true);
     try {
       // 1. Post to backend to save lead locally
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : "http://localhost:8000");
+      const backendUrl = getApiUrl();
       fetch(`${backendUrl}/api/v1/early-access`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
