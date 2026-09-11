@@ -1,5 +1,5 @@
-import { getApiUrl } from '@/lib/api';
 'use client';
+import { getApiUrl } from '@/lib/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
 import { MessageSquare, GitBranch, FileText, Database, ShieldAlert, Loader2, Link as LinkIcon, RefreshCw, HardDrive, Cloud, X, Sparkles } from 'lucide-react';
