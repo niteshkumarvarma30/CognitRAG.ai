@@ -20,3 +20,4 @@ export { default as CognitiveBrainInteractive } from './CognitiveBrainInteractiv
 export { default as GroundedScenariosSection } from './GroundedScenariosSection';
 export { default as PersonaShowcaseSection } from './PersonaShowcaseSection';
 export { default as PersonaSelectionModal } from './PersonaSelectionModal';
+export { default as VisitorCounterBadge } from './VisitorCounterBadge';

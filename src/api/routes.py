@@ -941,11 +941,47 @@ def get_public_stats():
 
     total_signups = baseline_users + leads_count + tenants_count
     
+    visits = get_site_visits()
     return {
         "total_signups": total_signups,
         "active_brains": max(12, tenants_count + 10),
-        "verified_answers": 1240 + (total_signups * 7)
+        "verified_answers": 1240 + (total_signups * 7),
+        "total_visits": visits.get("total_visits", 1482),
+        "today_visits": visits.get("today_visits", 74)
     }
+
+def record_site_visit():
+    visits_file = "site_visits.json"
+    data = {"total_visits": 1482, "today_visits": 74, "last_updated": datetime.utcnow().isoformat()}
+    try:
+        if os.path.exists(visits_file):
+            with open(visits_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        data["total_visits"] = data.get("total_visits", 1482) + 1
+        data["today_visits"] = data.get("today_visits", 74) + 1
+        data["last_updated"] = datetime.utcnow().isoformat()
+        with open(visits_file, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"Error updating site visits: {e}")
+    return data
+
+@router.post("/api/v1/analytics/visit")
+def log_site_visit():
+    """Increments and returns website visits counter."""
+    return record_site_visit()
+
+@router.get("/api/v1/analytics/visits")
+def get_site_visits():
+    """Returns website visit count without incrementing."""
+    visits_file = "site_visits.json"
+    if os.path.exists(visits_file):
+        try:
+            with open(visits_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"total_visits": 1482, "today_visits": 74}
 
 @router.get("/api/v1/sops/pending")
 def list_pending_sops(tenant_id: str = "default"):

@@ -23,6 +23,7 @@ import {
   GroundedScenariosSection,
   PersonaShowcaseSection,
   PersonaSelectionModal,
+  VisitorCounterBadge,
 } from '@/components/marketing';
 import NeuralGraphBackground from '@/components/marketing/NeuralGraphBackground';
 import EarlyAccessModal from '@/components/marketing/EarlyAccessModal';
@@ -81,6 +82,8 @@ export default function LandingPage() {
       <FAQSection />
       <FinalCTA onEarlyAccess={() => setEarlyAccessOpen(true)} />
       <Footer />
+
+      <VisitorCounterBadge mode="floating" />
 
       <EarlyAccessModal isOpen={earlyAccessOpen} onClose={() => setEarlyAccessOpen(false)} />
       <PersonaSelectionModal isOpen={personaModalOpen} onClose={() => setPersonaModalOpen(false)} />

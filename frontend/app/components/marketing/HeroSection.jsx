@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, CheckCircle2, Sparkles, ArrowRight, ShieldCheck, Database, Cpu, MessageSquare, FileText, GitBranch, Bot, Network } from 'lucide-react';
 import ThreeDCompanyBrain from './ThreeDCompanyBrain';
+import VisitorCounterBadge from './VisitorCounterBadge';
 
 export default function HeroSection({ onEarlyAccess, onGetStarted }) {
   return (
@@ -46,6 +47,9 @@ export default function HeroSection({ onEarlyAccess, onGetStarted }) {
 
         {/* Left Side: Hero Brand Pitch & Large CognitRAG Typography */}
         <div style={{ pointerEvents: 'auto' }}>
+
+          {/* Live Visitor & Profile Views Counter */}
+          <VisitorCounterBadge mode="hero" />
 
           {/* CognitRAG (Prominent Big Brand Title) */}
           <div style={{ marginBottom: '14px' }}>
