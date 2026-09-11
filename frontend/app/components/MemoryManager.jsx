@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { Trash2, Plus, Brain, Settings } from 'lucide-react';
+import { getApiUrl } from '@/lib/api';
 
-const API_BASE = ${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1;
+const getApiBase = () => `${getApiUrl()}/api/v1`;
 
 export default function MemoryManager({ tenantId, onClose }) {
   const { user } = useUser();
@@ -17,8 +18,8 @@ export default function MemoryManager({ tenantId, onClose }) {
   const fetchMemory = async () => {
     setIsLoading(true);
     try {
-      const factsRes = await fetch(`${API_BASE}/memory/${tenantId}/${user.id}/facts`);
-      const prefsRes = await fetch(`${API_BASE}/memory/${tenantId}/${user.id}/preferences`);
+      const factsRes = await fetch(`${getApiBase()}/memory/${tenantId}/${user.id}/facts`);
+      const prefsRes = await fetch(`${getApiBase()}/memory/${tenantId}/${user.id}/preferences`);
       
       const factsData = await factsRes.json();
       const prefsData = await prefsRes.json();
@@ -38,7 +39,7 @@ export default function MemoryManager({ tenantId, onClose }) {
 
   const deleteFact = async (factId) => {
     try {
-      await fetch(`${API_BASE}/memory/${tenantId}/${user.id}/facts/${factId}`, { method: 'DELETE' });
+      await fetch(`${getApiBase()}/memory/${tenantId}/${user.id}/facts/${factId}`, { method: 'DELETE' });
       setFacts(prev => prev.filter(f => f.id !== factId));
     } catch (e) {
       console.error("Failed to delete fact:", e);
@@ -47,7 +48,7 @@ export default function MemoryManager({ tenantId, onClose }) {
 
   const deletePreference = async (prefKey) => {
     try {
-      await fetch(`${API_BASE}/memory/${tenantId}/${user.id}/preferences/${prefKey}`, { method: 'DELETE' });
+      await fetch(`${getApiBase()}/memory/${tenantId}/${user.id}/preferences/${prefKey}`, { method: 'DELETE' });
       setPreferences(prev => prev.filter(p => p.pref_key !== prefKey));
     } catch (e) {
       console.error("Failed to delete preference:", e);
@@ -59,7 +60,7 @@ export default function MemoryManager({ tenantId, onClose }) {
     if (!newPrefKey.trim() || !newPrefVal.trim()) return;
     
     try {
-      await fetch(`${API_BASE}/memory/${tenantId}/${user.id}/preferences`, {
+      await fetch(`${getApiBase()}/memory/${tenantId}/${user.id}/preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: newPrefKey.trim(), value: newPrefVal.trim() })

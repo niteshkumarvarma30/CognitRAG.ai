@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Book, Plus, Trash2, Search, Building2, UserCircle } from 'lucide-react';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { motion } from 'framer-motion';
+import { getApiUrl } from '@/lib/api';
 
 const SemanticDictionary = () => {
   const { user } = useUser();
@@ -25,7 +26,7 @@ const SemanticDictionary = () => {
     try {
       setIsLoading(true);
       const token = await getToken();
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/semantic/definitions?tenant_id=${user.id}`, {
+      const res = await fetch(`${getApiUrl()}/api/v1/semantic/definitions?tenant_id=${user.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -48,7 +49,7 @@ const SemanticDictionary = () => {
     setErrorMsg('');
     try {
       const token = await getToken();
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/semantic/definition`, {
+      const res = await fetch(`${getApiUrl()}/api/v1/semantic/definition`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -83,7 +84,7 @@ const SemanticDictionary = () => {
     if (!window.confirm("Are you sure you want to delete this definition?")) return;
     try {
       const token = await getToken();
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/semantic/definition/${id}?tenant_id=${user.id}`, {
+      const res = await fetch(`${getApiUrl()}/api/v1/semantic/definition/${id}?tenant_id=${user.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

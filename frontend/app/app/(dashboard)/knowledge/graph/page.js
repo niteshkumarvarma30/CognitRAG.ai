@@ -21,6 +21,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import Link from 'next/link';
+import { getApiUrl } from '@/lib/api';
 
 // Dynamically import react-force-graph-3d with SSR disabled
 const ForceGraph3D = dynamic(() => import('react-force-graph-3d'), { ssr: false });
@@ -80,7 +81,7 @@ export default function GraphExplorer() {
     setLoading(true);
     setFetchError(false);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/v1/graph/${tenantId}/export`);
       if (res.ok) {
         const data = await res.json();

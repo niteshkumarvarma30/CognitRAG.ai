@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Brain, Settings, Database, History, ShieldCheck, Users } from 'lucide-react';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getApiUrl } from '@/lib/api';
 
 const MemoryHub = () => {
   const { user } = useUser();
@@ -19,13 +20,13 @@ const MemoryHub = () => {
         const token = await getToken();
         const headers = { 'Authorization': `Bearer ${token}` };
         
-        const factsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/memory/${user.id}/${user.id}/facts`, { headers });
+        const factsRes = await fetch(`${getApiUrl()}/api/v1/memory/${user.id}/${user.id}/facts`, { headers });
         if (factsRes.ok) setFacts(await factsRes.json());
         
-        const prefRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/memory/${user.id}/${user.id}/preferences`, { headers });
+        const prefRes = await fetch(`${getApiUrl()}/api/v1/memory/${user.id}/${user.id}/preferences`, { headers });
         if (prefRes.ok) setPreferences(await prefRes.json());
         
-        const epiRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/memory/${user.id}/${user.id}/episodic`, { headers });
+        const epiRes = await fetch(`${getApiUrl()}/api/v1/memory/${user.id}/${user.id}/episodic`, { headers });
         if (epiRes.ok) setTimeline(await epiRes.json());
       } catch (err) {
         console.error("Failed to fetch memory hub data:", err);

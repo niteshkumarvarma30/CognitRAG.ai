@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
+import { getApiUrl } from '@/lib/api';
 
 export const SUPERADMIN_EMAIL = 'niteshkumarvarma5722@gmail.com';
 
@@ -28,7 +29,7 @@ export default function PersonaAdminMetricsPage() {
     if (!isSuperAdmin) return;
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:8000/api/v1/admin/persona-metrics?admin_email=${encodeURIComponent(userEmail)}`);
+      const res = await fetch(`${getApiUrl()}/api/v1/admin/persona-metrics?admin_email=${encodeURIComponent(userEmail)}`);
       if (res.ok) {
         const json = await res.json();
         setData(json);

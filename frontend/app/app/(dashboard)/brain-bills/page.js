@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { CreditCard, Receipt, Clock, Zap } from 'lucide-react';
+import { getApiUrl } from '@/lib/api';
 
 export default function Page() {
   const { user } = useUser();
@@ -16,7 +17,7 @@ export default function Page() {
 
   const fetchBillingData = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/billing/${user.id}`);
+      const res = await fetch(`${getApiUrl()}/api/v1/billing/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setBillingData(data);

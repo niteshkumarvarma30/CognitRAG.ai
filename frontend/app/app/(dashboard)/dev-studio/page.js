@@ -8,6 +8,7 @@ import {
   AlertCircle, FileText, Loader2, X, HardDrive, Cpu, Check,
   GitPullRequest, ExternalLink, Lock, Unlock, Star, LogOut, Network, MessageSquare
 } from 'lucide-react';
+import { getApiUrl } from '@/lib/api';
 
 function GithubIcon({ size = 16, color = "currentColor", style = {} }) {
   return (
@@ -93,7 +94,7 @@ export default function DevStudioPage() {
   // Check GitHub Connection Status
   const checkGithubStatus = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/code/github/status?workspace_id=${workspaceId}`);
+      const res = await fetch(`${getApiUrl()}/api/v1/code/github/status?workspace_id=${workspaceId}`);
       if (res.ok) {
         const data = await res.json();
         setGithubConnected(data.connected);
@@ -127,7 +128,7 @@ export default function DevStudioPage() {
     setGithubConnectError(null);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/code/github/connect', {
+      const res = await fetch(`${getApiUrl()}/api/v1/code/github/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -153,7 +154,7 @@ export default function DevStudioPage() {
   // Disconnect GitHub
   const handleGithubDisconnect = async () => {
     try {
-      await fetch(`http://localhost:8000/api/v1/code/github/disconnect`, {
+      await fetch(`${getApiUrl()}/api/v1/code/github/disconnect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspace_id: workspaceId })
@@ -179,7 +180,7 @@ export default function DevStudioPage() {
     setUploadStep(`Requesting ${selectedRepo} (${selectedBranch}) from GitHub...`);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/code/github/fetch', {
+      const res = await fetch(`${getApiUrl()}/api/v1/code/github/fetch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +199,7 @@ export default function DevStudioPage() {
 
         const pollInterval = setInterval(async () => {
           try {
-            const jobRes = await fetch(`http://localhost:8000/api/v1/code/jobs/${jobId}`);
+            const jobRes = await fetch(`${getApiUrl()}/api/v1/code/jobs/${jobId}`);
             if (jobRes.ok) {
               const job = await jobRes.json();
               setUploadProgress(job.progress_pct || 20);
@@ -246,7 +247,7 @@ export default function DevStudioPage() {
       if (repoParam) queryParams.append('repo', repoParam);
       if (branchParam) queryParams.append('branch', branchParam);
 
-      const res = await fetch(`http://localhost:8000/api/v1/code/tree?${queryParams.toString()}`);
+      const res = await fetch(`${getApiUrl()}/api/v1/code/tree?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setTreeData(data.tree || []);
@@ -289,7 +290,7 @@ export default function DevStudioPage() {
       if (repoParam) queryParams.append('repo', repoParam);
       if (branchParam) queryParams.append('branch', branchParam);
 
-      const res = await fetch(`http://localhost:8000/api/v1/code/file?${queryParams.toString()}`);
+      const res = await fetch(`${getApiUrl()}/api/v1/code/file?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setFileContent(data.content || '');
@@ -382,7 +383,7 @@ export default function DevStudioPage() {
     formData.append('file', uploadFile);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/code/upload', {
+      const res = await fetch(`${getApiUrl()}/api/v1/code/upload`, {
         method: 'POST',
         body: formData
       });
@@ -395,7 +396,7 @@ export default function DevStudioPage() {
 
         const pollInterval = setInterval(async () => {
           try {
-            const jobRes = await fetch(`http://localhost:8000/api/v1/code/jobs/${jobId}`);
+            const jobRes = await fetch(`${getApiUrl()}/api/v1/code/jobs/${jobId}`);
             if (jobRes.ok) {
               const job = await jobRes.json();
               setUploadProgress(job.progress_pct || 15);
@@ -508,7 +509,7 @@ export default function DevStudioPage() {
       const formData = new FormData();
       formData.append('file', audioBlob, `voice_query.${ext}`);
 
-      const res = await fetch('http://localhost:8000/api/v1/voice/transcribe', {
+      const res = await fetch(`${getApiUrl()}/api/v1/voice/transcribe`, {
         method: 'POST',
         body: formData
       });
@@ -552,7 +553,7 @@ export default function DevStudioPage() {
     }, 3200);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/code/query', {
+      const res = await fetch(`${getApiUrl()}/api/v1/code/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1471,7 +1472,7 @@ export default function DevStudioPage() {
 
                     {/* Method A: Direct 1-Click OAuth */}
                     <a
-                      href={`http://localhost:8000/api/v1/integrations/github/auth?tenant_id=${workspaceId}&redirect_to=dev_studio`}
+                      href={`${getApiUrl()}/api/v1/integrations/github/auth?tenant_id=${workspaceId}&redirect_to=dev_studio`}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
