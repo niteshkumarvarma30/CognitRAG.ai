@@ -9,7 +9,12 @@ export const getApiUrl = () => {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     const protocol = window.location.protocol;
+    const port = window.location.port;
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      // If accessed via production domain (standard port 80/443 or no port specified)
+      if (!port || port === '80' || port === '443') {
+        return `${protocol}//${host}`;
+      }
       return `${protocol}//${host}:8000`;
     }
   }
