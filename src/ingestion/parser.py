@@ -1,61 +1,74 @@
-import os
-import fitz  # PyMuPDF
+"""
+CognitRAG v2 — Ingestion Parser
+Parses various document types into normalized text.
+Removed financial text cleaner (SEC-specific, not in scope).
+"""
+import re
+import fitz           # PyMuPDF
 import pymupdf4llm
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+
 def parse_pdf(pdf_bytes: bytes) -> str:
-    """Extracts text from a raw PDF byte stream and converts it into Markdown format. Limited to 20 pages for local testing."""
+    """Extracts text from a raw PDF byte stream and converts to Markdown."""
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        pages_to_process = list(range(min(20, len(doc))))
-        md_text = pymupdf4llm.to_markdown(doc, pages=pages_to_process)
+        md_text = pymupdf4llm.to_markdown(doc)
         return md_text
     except Exception as e:
-        print(f"pymupdf4llm failed with {e}. Falling back to standard PyMuPDF text extraction.")
+        print(f"pymupdf4llm failed ({e}). Falling back to standard extraction.")
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         text = ""
-        pages_to_process = min(20, len(doc))
-        for i in range(pages_to_process):
-            text += doc[i].get_text("text") + "\n\n"
+        for page in doc:
+            text += page.get_text("text") + "\n\n"
         return text
 
-import re
 
-def clean_financial_text(text: str) -> str:
-    """Removes XBRL tags, URLs, and noisy metadata from financial documents."""
-    # Remove XML/XBRL tags (e.g. <us-gaap:...> or </us-gaap:...>)
-    text = re.sub(r'<[^>]+>', '', text)
-    # Remove URLs
-    text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
-    # Strip table-of-contents dot leaders (e.g. ................ 12)
-    text = re.sub(r'\.{4,}', ' ', text)
-    # Remove excessive blank lines and whitespace
+def parse_markdown(text: str) -> str:
+    """Clean markdown text — remove excessive whitespace."""
     text = re.sub(r'\n{3,}', '\n\n', text)
-    # Remove purely numeric/symbolic lines that are just table artifacts
-    lines = text.split('\n')
-    cleaned_lines = []
-    for line in lines:
-        stripped = line.strip()
-        # Skip lines that are just numbers, punctuation, or empty
-        if not stripped or re.fullmatch(r'[\d\.\,\%\$\-\s]+', stripped):
-            continue
-        cleaned_lines.append(line)
-    return "\n".join(cleaned_lines)
+    text = text.strip()
+    return text
 
-def chunk_text(text: str) -> list[str]:
-    """Chunks Markdown text logically using Recursive Chunking."""
-    
-    print("  -> Cleaning raw financial text...")
-    text = clean_financial_text(text)
-    
-    # Parent Splitter (2000 characters)
+
+def parse_slack_text(text: str) -> str:
+    """
+    Clean Slack message text:
+    - Resolve <@USER_ID> mentions to readable format
+    - Remove Slack formatting markers
+    - Keep Hinglish intact — do NOT translate
+    """
+    # Replace user mentions with placeholder
+    text = re.sub(r'<@\w+>', '@user', text)
+    # Replace channel mentions
+    text = re.sub(r'<#\w+\|(\w+)>', r'#\1', text)
+    # Remove link formatting but keep URL text
+    text = re.sub(r'<(https?://[^|>]+)\|([^>]+)>', r'\2 (\1)', text)
+    text = re.sub(r'<(https?://[^>]+)>', r'\1', text)
+    # Remove excessive whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
+def chunk_text(text: str, language_tag: str = "en") -> list[str]:
+    """
+    Chunk text into parent chunks for pipeline processing.
+    Language-aware: Hinglish text uses smaller chunks
+    (shorter sentences, context shifts more frequently).
+    """
+    # Adjust chunk size for Hinglish — shorter sentences, more context-dense
+    if language_tag in ("hi-latn", "mixed"):
+        chunk_size = 1500
+        chunk_overlap = 600
+    else:
+        chunk_size = 2000
+        chunk_overlap = 800
+
     parent_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000,
-        chunk_overlap=800,
-        separators=["\n\n", "\n", ".", " ", ""]
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=["\n\n", "\n", ".", "।", " ", ""]  # ।  = Devanagari danda
     )
-    
-    print("  -> Creating Parent Chunks...")
+
     parent_docs = parent_splitter.split_text(text)
-    
-    return parent_docs
+    return [doc.strip() for doc in parent_docs if doc.strip()]

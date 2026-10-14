@@ -13,21 +13,32 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from typing import Sequence
-import redis.asyncio as redis
+import time
+from typing import Sequence, Optional
+
+try:
+    import redis.asyncio as redis
+except ImportError:
+    redis = None
 
 from src.config import db as db_cfg, app as app_cfg
 from src.database.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
 
-_redis_client: redis.Redis | None = None
+_redis_client = None
+_local_perm_cache: dict[str, tuple[float, list[str]]] = {}
 
 
-def get_redis() -> redis.Redis:
+def get_redis():
     global _redis_client
-    if _redis_client is None:
-        _redis_client = redis.from_url(db_cfg.redis_url, decode_responses=True)
+    if redis is None:
+        return None
+    if _redis_client is None and db_cfg.redis_url:
+        try:
+            _redis_client = redis.from_url(db_cfg.redis_url, decode_responses=True)
+        except Exception:
+            _redis_client = None
     return _redis_client
 
 

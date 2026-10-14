@@ -32,6 +32,7 @@ class GraphState(TypedDict):
     # Phase 2.1: Multi-Agent Architecture
     next_agent: str
     worker_responses: Dict[str, str]
+    agent_steps: int
     
     # Phase 3: Audit Trail & Evidence Receipts
     audit_trail: List[Dict[str, Any]]

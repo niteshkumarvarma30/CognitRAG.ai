@@ -25,7 +25,6 @@ def get_tenant_uuid(clerk_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, clerk_id))
 
 class ChatRequest(BaseModel):
-    # Backward compatible tenant_id, but logically it maps to workspace_id now
     tenant_id: str
     user_id: Optional[str] = "default_user"
     message: str
@@ -40,16 +39,19 @@ class CancelRequest(BaseModel):
 
 @router.post("/api/v1/chat")
 def chat_endpoint(request: ChatRequest):
-    """Executes the full Hybrid CRAG loop and logs token usage for billing."""
-    # Convert legacy tenant_id or workspace_id to standard UUID
+    """Executes the full Hybrid CRAG loop. Returns answer with claim-level citations."""
+    from src.ingestion.language_detector import detect_language
+    from src.ingestion.contradiction_detector import check_conflicts
+
     try:
-        # Check if it's already a valid UUID (workspace_id)
         uuid.UUID(request.tenant_id)
         uuid_tenant = request.tenant_id
     except ValueError:
-        # Legacy deterministic fallback
         uuid_tenant = get_tenant_uuid(request.tenant_id)
-        
+
+    # Detect query language for embedding routing
+    query_language = detect_language(request.message)
+
     initial_state = {
         "tenant_id": uuid_tenant,
         "user_id": request.user_id,
@@ -57,41 +59,54 @@ def chat_endpoint(request: ChatRequest):
         "generation": "",
         "documents": "",
         "route": "",
-        "chat_history": request.chat_history
+        "chat_history": request.chat_history,
+        "query_language": query_language
     }
-    
-    # 1. Execute LangGraph
+
+    # Execute LangGraph RAG pipeline
     final_state = crag_app.invoke(initial_state)
-    answer = final_state["generation"]
-    
-    # Format the context from retrieved documents
+    answer = final_state.get("generation", "")
+
+    # Build claim-level citations from retrieved documents
     context_docs = final_state.get("documents", [])
-    if isinstance(context_docs, str):
-        context_string = context_docs
-    else:
-        context_string = "\n\n".join([doc.page_content for doc in context_docs if hasattr(doc, "page_content")])
-    
-    # 2. Phase 4 Usage Tracking (Mock Token Count)
+    citations = []
+    if isinstance(context_docs, list):
+        for doc in context_docs:
+            if isinstance(doc, dict):
+                citations.append({
+                    "chunk_id": str(doc.get("id", "")),
+                    "content_snippet": doc.get("content", "")[:200],
+                    "confidence": float(doc.get("similarity", doc.get("graph_score", 0.7))),
+                    "derivation": doc.get("derivation", "extracted"),
+                    "source_type": doc.get("source_type", "unknown"),
+                    "language_tag": doc.get("language_tag", "en"),
+                    "raw_ref_url": doc.get("raw_ref_url"),
+                    "author": doc.get("author"),
+                })
+
+    # Check for contradictions among retrieved chunks
+    contradictions = []
+    if isinstance(context_docs, list):
+        contradictions = check_conflicts(uuid_tenant, context_docs)
+
+    # Usage tracking
     try:
-        # Roughly estimate tokens: 1 word ~ 1.3 tokens
         estimated_tokens = int(len(answer.split()) * 1.3) + int(len(request.message.split()) * 1.3)
-        
-        # Use tenant client to write to transactions so the RLS RETURNING clause succeeds
-        db = supabase_manager.get_tenant_client(uuid_tenant)
+        db = supabase_manager.get_admin_client()
         db.table("transactions").insert({
             "tenant_id": uuid_tenant,
-            "tokens_used": estimated_tokens
+            "tokens_used": estimated_tokens,
+            "operation_type": "query"
         }).execute()
-        print(f"Logged {estimated_tokens} tokens for billing on Tenant {uuid_tenant}.")
     except Exception as e:
         print(f"Failed to log transaction: {e}")
-    
+
     return {
         "answer": answer,
-        "context": context_string,
+        "citations": citations,
+        "contradictions": contradictions,
+        "language_detected": query_language,
         "audit_trail": final_state.get("audit_trail", []),
-        "evidence": final_state.get("evidence", []),
-        "confidence_score": final_state.get("confidence_score", 0.0)
     }
 
 @router.post("/api/v1/chat/stream")
@@ -830,22 +845,16 @@ async def transcribe_voice(file: UploadFile = File(...), target_language_code: O
         }
 
 # ---------------------------------------------------------------------------
-# REAL-TIME ENTERPRISE WEBHOOKS (GitHub, Slack) & LIVING KNOWLEDGE
+# REAL-TIME ENTERPRISE WEBHOOKS (GitHub, Slack)
 # ---------------------------------------------------------------------------
 from src.utils.sanitizer import sanitize_text
 from src.ingestion.cross_linker import link_cross_system_entities
-from src.knowledge.living_sop import evaluate_sop_impact, get_pending_sop_changes, approve_sop_change
-
-class SOPApprovalRequest(BaseModel):
-    change_id: str
-    approver: str = "@admin"
-    tenant_id: str = "default"
 
 @router.post("/api/v1/webhooks/github")
 async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     """
     Receives GitHub Webhook events (PRs, Commits).
-    Triggers secret sanitization, cross-linking in Neo4j, and Living SOP impact analysis.
+    Triggers secret sanitization and cross-linking in Neo4j.
     """
     try:
         payload = await request.json()
@@ -873,12 +882,9 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
             # 2. Cross-link in Neo4j (Jira <-> PR <-> Incident)
             link_cross_system_entities(clean_text, tenant_id)
             
-            # 3. Evaluate Living SOP Impact in background
-            background_tasks.add_task(evaluate_sop_impact, f"GitHub PR #{pr_number}: {pr_title}", clean_text, tenant_id)
-            
             return {
                 "status": "success",
-                "message": f"Processed PR #{pr_number} merge, cross-linked graph, and evaluated Living SOP diff."
+                "message": f"Processed PR #{pr_number} merge and cross-linked graph."
             }
 
     return {"status": "ignored", "reason": f"Event {event_type}.{action} does not require knowledge update"}
@@ -984,16 +990,6 @@ def get_site_visits():
             pass
     return {"total_visits": 1482, "today_visits": 74}
 
-@router.get("/api/v1/sops/pending")
-def list_pending_sops(tenant_id: str = "default"):
-    """Returns all pending and recent Living SOP diff proposals."""
-    return {"changes": get_pending_sop_changes(tenant_id)}
-
-@router.post("/api/v1/sops/approve")
-def approve_sop(request: SOPApprovalRequest):
-    """Approves a proposed living SOP diff and marks it active."""
-    result = approve_sop_change(request.change_id, request.approver, request.tenant_id)
-    return result
 
 
 

@@ -50,3 +50,7 @@ class SupabaseManager:
         return client
 
 supabase_manager = SupabaseManager()
+
+def get_supabase() -> Client:
+    """Convenience getter for the Supabase service-role admin client."""
+    return supabase_manager.get_admin_client()

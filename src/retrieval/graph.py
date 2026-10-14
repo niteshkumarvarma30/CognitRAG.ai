@@ -10,6 +10,9 @@ from src.retrieval.nodes import (
 
 def decide_route(state):
     intent = state.get("route", "technical_query")
+    # If documents/context are already provided (e.g. evaluation or context override), route directly to generate
+    if state.get("documents") and intent in ["greeting", "faq"]:
+        return "generate"
     if intent in ["greeting", "faq"]:
         return "generate_cached"
     if intent in ["conversational", "followup", "personal"] or state.get("need_memory", False):
@@ -76,7 +79,8 @@ workflow.add_conditional_edges("route_query", decide_route, {
     "generate_cached": "generate_cached",
     "load_memory": "load_memory",
     "retrieve": "retrieve",
-    "supervisor_node": "supervisor_node"
+    "supervisor_node": "supervisor_node",
+    "generate": "generate"
 })
 workflow.add_edge("load_memory", "contextualize_query")
 
