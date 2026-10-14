@@ -4,19 +4,23 @@ import './globals.css'
 import './components.css'
 
 export const metadata = {
-  title: 'CognitRAG — The Company Brain',
-  description: 'Your company already has a brain. Connect it. CognitRAG turns fragmented enterprise knowledge into trusted context for people and AI agents.',
+  title: "CognitRAG.ai — Your team's memory, with proof",
+  description: "CognitRAG connects Slack, GitHub, Jira and Notion to give engineering teams verifiable answers with citation proof, whether asked in English or Hinglish.",
+  metadataBase: new URL('https://cognitrag.ai'),
+  alternates: {
+    canonical: '/'
+  },
   openGraph: {
-    title: 'CognitRAG — The Company Brain',
-    description: 'Connect fragmented company knowledge into trusted, verifiable context for humans and AI agents.',
+    title: "CognitRAG.ai — Your team's memory, with proof",
+    description: "CognitRAG connects Slack, GitHub, Jira and Notion to give engineering teams verifiable answers with citation proof.",
     url: 'https://cognitrag.ai',
-    siteName: 'CognitRAG',
+    siteName: 'CognitRAG.ai',
     images: [
       {
         url: 'https://cognitrag.ai/og-image.jpg',
         width: 1200,
         height: 630,
-        alt: 'CognitRAG — The Company Brain',
+        alt: "CognitRAG.ai — Your team's memory, with proof",
       },
     ],
     locale: 'en_US',
@@ -24,8 +28,8 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'CognitRAG — The Company Brain',
-    description: 'Your company already has a brain. Connect it.',
+    title: "CognitRAG.ai — Your team's memory, with proof",
+    description: "Your team's memory, with proof. Connecting Slack, GitHub, Jira and Notion for Hinglish-speaking engineering teams.",
   },
 }
 

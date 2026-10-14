@@ -1,92 +1,60 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   GlobalNav,
   HeroSection,
-  TrustStrip,
-  ProblemSection,
-  CompanyBrainSection,
+  ClaimDemo,
   HowItWorksSection,
-  AskBrainDemo,
-  LivingKnowledgeSection,
-  SemanticGraphSection,
-  AIAgentsSection,
-  SecuritySection,
   IntegrationsGrid,
-  ProofSection,
-  SolutionsMatrix,
+  PrivacySection,
+  EarlyResults,
   PricingSection,
   FAQSection,
-  FinalCTA,
   Footer,
-  GroundedScenariosSection,
-  PersonaShowcaseSection,
-  PersonaSelectionModal,
-  VisitorCounterBadge,
+  EarlyAccessModal
 } from '@/components/marketing';
-import NeuralGraphBackground from '@/components/marketing/NeuralGraphBackground';
-import EarlyAccessModal from '@/components/marketing/EarlyAccessModal';
-
 import { useAuth } from '@clerk/nextjs';
-import { useEffect } from 'react';
 
 export default function LandingPage() {
   const [earlyAccessOpen, setEarlyAccessOpen] = useState(false);
-  const [personaModalOpen, setPersonaModalOpen] = useState(false);
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
 
-  // Redirect logged-in users to their dedicated persona dashboard
+  // Redirect signed-in users to home dashboard
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      const storedPersona = typeof window !== 'undefined' ? localStorage.getItem('cognitrag_persona') : null;
-      if (storedPersona === 'superadmin') {
-        router.replace('/dashboard');
-      } else if (storedPersona === 'company_brain' || storedPersona === 'enterprise_brain') {
-        router.replace('/enterprise-brain');
-      } else if (storedPersona === 'bharat_intelligence') {
-        router.replace('/bharat-intelligence');
-      } else {
-        router.replace('/dev-studio');
-      }
+      router.replace('/home');
     }
   }, [isLoaded, isSignedIn, router]);
 
   if (!isLoaded || isSignedIn) return null;
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden', background: 'var(--bg)', position: 'relative' }}>
-      <NeuralGraphBackground />
-      <GlobalNav onEarlyAccess={() => setEarlyAccessOpen(true)} />
-
-      <HeroSection 
-        onEarlyAccess={() => setEarlyAccessOpen(true)} 
-        onGetStarted={() => setPersonaModalOpen(true)} 
-      />
-      <TrustStrip />
-      <PersonaShowcaseSection />
-      <GroundedScenariosSection />
-      <ProblemSection />
-      <CompanyBrainSection />
-      <HowItWorksSection />
-      <ProofSection />
-      <AskBrainDemo />
-      <LivingKnowledgeSection />
-      <SemanticGraphSection />
-      <AIAgentsSection />
-      <SecuritySection />
-      <IntegrationsGrid />
-      <SolutionsMatrix />
-      <PricingSection onEarlyAccess={() => setEarlyAccessOpen(true)} />
-      <FAQSection />
-      <FinalCTA onEarlyAccess={() => setEarlyAccessOpen(true)} />
+    <div style={{
+      minHeight: '100vh',
+      width: '100%',
+      overflowX: 'hidden',
+      backgroundColor: 'var(--bg)',
+      color: 'var(--ink)',
+      position: 'relative'
+    }}>
+      <GlobalNav onOpenEarlyAccess={() => setEarlyAccessOpen(true)} />
+      <main>
+        <HeroSection onOpenEarlyAccess={() => setEarlyAccessOpen(true)} />
+        <ClaimDemo />
+        <HowItWorksSection />
+        <IntegrationsGrid />
+        <PrivacySection />
+        <EarlyResults />
+        <PricingSection onOpenEarlyAccess={() => setEarlyAccessOpen(true)} />
+        <FAQSection />
+      </main>
       <Footer />
-
-      <VisitorCounterBadge mode="floating" />
-
-      <EarlyAccessModal isOpen={earlyAccessOpen} onClose={() => setEarlyAccessOpen(false)} />
-      <PersonaSelectionModal isOpen={personaModalOpen} onClose={() => setPersonaModalOpen(false)} />
+      <EarlyAccessModal
+        isOpen={earlyAccessOpen}
+        onClose={() => setEarlyAccessOpen(false)}
+      />
     </div>
   );
 }

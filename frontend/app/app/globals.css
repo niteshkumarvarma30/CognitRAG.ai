@@ -5,13 +5,23 @@
    ============================================================ */
 
 :root {
-  /* ── Backgrounds & Surfaces (Warm Bone Minimalist) ── */
-  --bg:                 #F8F7F4;
-  --surface:            #FFFFFF;
-  --surface-soft:       #F4F3EE;
-  --surface-dark:       #18181B;
-  --surface-dark-panel: #27272A;
-  --surface-dark-hover: #3F3F46;
+  /* ── Prototype Tokens (Dark is brand default) ── */
+  --bg:                 #080B14;
+  --bg2:                #10172A;
+  --ink:                #F8FAFC;
+  --mute:               #9AA6C3;
+  --line:               #222B45;
+  --ind:                #818CF8;
+  --cy:                 #38BDF8;
+  --em:                 #22C55E;
+  --am:                 #F59E0B;
+  --glow:               rgba(99,102,241,.2);
+
+  /* ── Backward Compatibility Surfaces ── */
+  --surface:            #10172A;
+  --surface-soft:       #18223B;
+  --surface-dark:       #080B14;
+  --surface-dark-hover: #1E293B;
 
   /* ── Typography Colors (Deep Charcoal & Warm Slate) ── */
   --text-primary:       #18181B;
@@ -92,6 +102,53 @@
 
   /* ── Glass ── */
   --glass-blur:  blur(24px);
+}
+
+:root[data-theme="light"] {
+  --bg:                 #F6F7FB;
+  --bg2:                #FFFFFF;
+  --ink:                #0B1020;
+  --mute:               #4A5470;
+  --line:               #DDE1EE;
+  --ind:                #4F46E5;
+  --cy:                 #0369A1;
+  --em:                 #15803D;
+  --am:                 #B45309;
+  --glow:               rgba(79,70,229,.12);
+  --surface:            #FFFFFF;
+  --surface-soft:       #F1F5F9;
+}
+
+:root[data-theme="dark"] {
+  --bg:                 #080B14;
+  --bg2:                #10172A;
+  --ink:                #F8FAFC;
+  --mute:               #9AA6C3;
+  --line:               #222B45;
+  --ind:                #818CF8;
+  --cy:                 #38BDF8;
+  --em:                 #22C55E;
+  --am:                 #F59E0B;
+  --glow:               rgba(99,102,241,.2);
+  --surface:            #10172A;
+  --surface-soft:       #18223B;
+}
+
+/* Prototype Max Content Container & Fonts */
+.landing-container {
+  max-width: 1040px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+}
+
+.font-serif-headline {
+  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+.font-sans-body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 /* ============================================================

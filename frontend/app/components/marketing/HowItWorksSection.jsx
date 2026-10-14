@@ -1,96 +1,129 @@
 'use client';
 import React from 'react';
-import { Link, Brain, ShieldCheck, Zap } from 'lucide-react';
+import { Link2, MessageSquare, CheckCheck } from 'lucide-react';
 
 export default function HowItWorksSection() {
   const steps = [
-    { num: '01', title: 'Connect', desc: 'Ingest data from Slack, Jira, GitHub, Google Workspace, and Notion.', icon: Link },
-    { num: '02', title: 'Understand', desc: 'Extract entities, map relationships, resolve coreferences, and build a semantic graph.', icon: Brain },
-    { num: '03', title: 'Verify', desc: 'Ground every answer in evidence with source citations, timestamps, and confidence scores.', icon: ShieldCheck },
-    { num: '04', title: 'Act', desc: 'Deliver trusted context to employees, APIs, and AI agents.', icon: Zap }
+    {
+      num: '01',
+      title: 'Connect',
+      icon: <Link2 size={22} style={{ color: 'var(--ind)' }} />,
+      desc: 'Link your team’s existing tools—Slack, GitHub, Jira and Notion. Authentication respects existing workspace memberships and access levels.'
+    },
+    {
+      num: '02',
+      title: 'Ask',
+      icon: <MessageSquare size={22} style={{ color: 'var(--cy)' }} />,
+      desc: 'Ask questions in plain English or natural Hinglish. CognitRAG routes your query across structured API endpoints, discussion history, and design specs.'
+    },
+    {
+      num: '03',
+      title: 'Check',
+      icon: <CheckCheck size={22} style={{ color: 'var(--em)' }} />,
+      desc: 'Every claim is paired with a direct citation chip. Green for direct tool state, cyan for extracted discussion context, and amber for conflicting documentation.'
+    }
   ];
 
   return (
     <section id="how-it-works" style={{
-      width: '100%',
-      display: 'flex',
-      justifyContent: 'center',
-      padding: '80px 24px'
+      padding: '64px 0',
+      backgroundColor: 'var(--bg)'
     }}>
-      <div style={{
-        maxWidth: '1000px',
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center'
-      }}>
-        <h2 style={{
-          fontSize: '2.5rem',
-          fontWeight: 700,
-          color: 'var(--text-primary)',
-          lineHeight: 1.2,
-          margin: '0 0 16px 0',
-          textAlign: 'center'
-        }}>
-          How CognitRAG Works
-        </h2>
-        <div style={{
-          color: 'var(--text-secondary)',
-          fontSize: '1.125rem',
-          marginBottom: '64px',
-          textAlign: 'center'
-        }}>
-          Four stages from fragmented data to trusted intelligence
+      <div className="landing-container">
+        <div style={{ textAlign: 'center', marginBottom: '44px' }}>
+          <div style={{
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            color: 'var(--ind)',
+            letterSpacing: '0.04em',
+            marginBottom: '8px'
+          }}>
+            Three Steps
+          </div>
+          <h2 className="font-serif-headline" style={{
+            fontSize: 'clamp(1.8rem, 3.5vw, 2.5rem)',
+            color: 'var(--ink)',
+            margin: '0 0 10px 0',
+            fontWeight: 400
+          }}>
+            How CognitRAG works
+          </h2>
+          <p style={{
+            color: 'var(--mute)',
+            fontSize: '1rem',
+            maxWidth: '540px',
+            margin: '0 auto'
+          }}>
+            A continuous loop from engineering tools to trusted, verifiable answers.
+          </p>
         </div>
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '24px',
-          width: '100%'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: '24px'
         }}>
-          {steps.map((step) => {
-            const Icon = step.icon;
-            return (
-              <div key={step.num} style={{
-                backgroundColor: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-xl)',
-                padding: '24px',
+          {steps.map((step) => (
+            <div
+              key={step.num}
+              style={{
+                backgroundColor: 'var(--bg2)',
+                border: '1px solid var(--line)',
+                borderRadius: '10px',
+                padding: '28px 24px',
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'flex-start'
+                gap: '14px',
+                position: 'relative'
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
               }}>
                 <div style={{
-                  fontSize: '2.5rem',
-                  fontWeight: 800,
-                  color: 'var(--primary)',
-                  opacity: 0.3,
-                  fontFamily: 'var(--font-mono)',
-                  marginBottom: '16px'
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg)',
+                  border: '1px solid var(--line)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {step.icon}
+                </div>
+                <span style={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: 'var(--mute)'
                 }}>
                   {step.num}
-                </div>
-                <Icon size={24} color="var(--primary)" style={{ marginBottom: '8px' }} />
-                <div style={{
-                  fontWeight: 700,
-                  fontSize: '1.125rem',
-                  color: 'var(--text-primary)',
-                  marginTop: '12px',
-                  marginBottom: '8px'
-                }}>
-                  {step.title}
-                </div>
-                <div style={{
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.875rem',
-                  lineHeight: 1.5
-                }}>
-                  {step.desc}
-                </div>
+                </span>
               </div>
-            );
-          })}
+
+              <h3 style={{
+                fontSize: '1.2rem',
+                fontWeight: 600,
+                color: 'var(--ink)',
+                margin: 0
+              }}>
+                {step.title}
+              </h3>
+
+              <p style={{
+                fontSize: '0.92rem',
+                lineHeight: 1.6,
+                color: 'var(--mute)',
+                margin: 0
+              }}>
+                {step.desc}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
     </section>

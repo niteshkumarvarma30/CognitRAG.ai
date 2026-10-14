@@ -1,206 +1,433 @@
 'use client';
 import React, { useState } from 'react';
-import { X, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, ArrowRight, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { getApiUrl } from '@/lib/api';
 
-const ROLES = ['Engineering', 'Product', 'Operations', 'Customer Support', 'AI / ML', 'Founder / Leadership', 'Other'];
-const SIZES = ['1–10', '11–50', '51–200', '201–500', '500+'];
+const TEAM_SIZES = ['1', '2–10', '11–50', '51–200', 'More than 200'];
+const TOOLS = ['Slack', 'GitHub', 'Jira', 'Notion'];
+const HINGLISH_OPTIONS = [
+  { value: 'yes', label: 'Yes, daily' },
+  { value: 'sometimes', label: 'Sometimes' },
+  { value: 'no', label: 'No, English only' }
+];
 
 export default function EarlyAccessModal({ isOpen, onClose }) {
   const [step, setStep] = useState('form'); // 'form' | 'success' | 'error'
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    name: '', email: '', company: '', role: '', companySize: '', useCase: '', systems: ''
+  const [errorMsg, setErrorMsg] = useState('');
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    name: '',
+    team_size: '2–10',
+    tools: ['Slack', 'GitHub'],
+    hinglish_use: 'sometimes',
+    message: '',
+    // Honeypot field: invisible to humans, filled by bots
+    website: ''
   });
 
   if (!isOpen) return null;
 
+  const handleToolToggle = (tool) => {
+    setFormData((prev) => {
+      const exists = prev.tools.includes(tool);
+      return {
+        ...prev,
+        tools: exists ? prev.tools.filter((t) => t !== tool) : [...prev.tools, tool]
+      };
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.company) return;
+    if (!formData.email) return;
+
     setLoading(true);
+    setErrorMsg('');
+
     try {
-      // 1. Post to backend to save lead locally
       const backendUrl = getApiUrl();
-      fetch(`${backendUrl}/api/v1/early-access`, {
+      const res = await fetch(`${backendUrl}/api/v1/early-access`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      }).catch(err => console.error("Backend lead save error:", err));
-
-      // 2. Post directly to Web3Forms (client-side) for instant email delivery
-      const web3Res = await fetch("https://api.web3forms.com/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({
-          access_key: "d24565ba-a2c9-4b55-9051-c4e816d55f20",
-          subject: `New CognitRAG Early Access Lead: ${form.name} (${form.company})`,
-          from_name: "CognitRAG System",
-          name: form.name,
-          email: form.email,
-          message: `New Early Access Lead!\n\nName: ${form.name}\nEmail: ${form.email}\nCompany: ${form.company}\nRole: ${form.role || 'N/A'}\nCompany Size: ${form.companySize || 'N/A'}\nUse Case: ${form.useCase || 'N/A'}\nConnected Systems: ${form.systems || 'N/A'}`
-        })
+        body: JSON.stringify(formData)
       });
 
-      if (web3Res.ok) {
-        setStep('success');
-      } else {
-        setStep('success'); // Still show success so user experience is smooth
+      if (res.status === 429) {
+        setErrorMsg('Too many requests. Please try again in a few minutes.');
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error("Form submit error:", err);
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErrorMsg(data.detail || 'Unable to submit request. Please try again.');
+        setLoading(false);
+        return;
+      }
+
       setStep('success');
+    } catch (err) {
+      console.error('Submission error:', err);
+      // Graceful fallback display so user is never stranded
+      setStep('success');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const inputStyle = {
-    width: '100%', padding: '10px 14px', fontSize: '0.9375rem',
-    border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
-    background: 'var(--bg)', color: 'var(--text-primary)',
-    outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-sans)',
-    transition: 'border-color 150ms ease'
+    width: '100%',
+    padding: '9px 12px',
+    fontSize: '0.9rem',
+    border: '1px solid var(--line)',
+    borderRadius: '6px',
+    backgroundColor: 'var(--bg)',
+    color: 'var(--ink)',
+    outline: 'none',
+    boxSizing: 'border-box',
+    fontFamily: 'inherit'
   };
 
   const labelStyle = {
-    display: 'block', fontSize: '0.8125rem', fontWeight: 600,
-    color: 'var(--text-secondary)', marginBottom: '6px'
+    display: 'block',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    color: 'var(--ink)',
+    marginBottom: '6px'
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '16px'
-    }} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 200,
+        backgroundColor: 'rgba(8, 11, 20, 0.75)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px'
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div style={{
-        background: 'var(--surface)', borderRadius: 'var(--radius-2xl)',
-        border: '1px solid var(--border)', width: '100%', maxWidth: '520px',
-        maxHeight: '90vh', overflowY: 'auto',
-        boxShadow: 'var(--shadow-xl)', position: 'relative'
+        backgroundColor: 'var(--bg2)',
+        border: '1px solid var(--line)',
+        borderRadius: '12px',
+        width: '100%',
+        maxWidth: '520px',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        padding: '28px',
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
+        position: 'relative'
       }}>
-        {/* Header */}
-        <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          aria-label="Close dialog"
+          style={{
+            position: 'absolute',
+            top: '18px',
+            right: '18px',
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--mute)',
+            cursor: 'pointer',
+            padding: '4px'
+          }}
+        >
+          <X size={18} />
+        </button>
+
+        {step === 'form' ? (
           <div>
-            <div style={{
-              display: 'inline-block', background: 'var(--primary-light)', color: 'var(--primary)',
-              fontSize: '0.75rem', fontWeight: 700, padding: '3px 10px',
-              borderRadius: 'var(--radius-pill)', marginBottom: '8px', letterSpacing: '0.06em'
-            }}>BUILD WITH US</div>
-            <h2 style={{ fontSize: '1.375rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-              Get Early Access
-            </h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              Join design partners shaping the future of company intelligence.
-            </p>
-          </div>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-muted)', padding: '4px', borderRadius: '6px'
-          }}>
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div style={{ padding: '24px' }}>
-          {step === 'success' && (
-            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <div style={{ marginBottom: '20px' }}>
               <div style={{
-                width: 64, height: 64, borderRadius: '50%',
-                background: 'rgba(22,163,74,0.1)', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                color: 'var(--ind)',
+                letterSpacing: '0.04em',
+                marginBottom: '4px'
               }}>
-                <CheckCircle2 size={32} color="var(--success)" />
+                Early Access
               </div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
-                You're on the list.
+              <h3 id="modal-title" className="font-serif-headline" style={{
+                fontSize: '1.6rem',
+                fontWeight: 400,
+                color: 'var(--ink)',
+                margin: '0 0 6px 0'
+              }}>
+                Request access to CognitRAG
               </h3>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
-                We'll be in touch soon. Keep an eye on your inbox at <strong>{form.email}</strong>.
+              <p style={{ fontSize: '0.86rem', color: 'var(--mute)', margin: 0, lineHeight: 1.5 }}>
+                We are onboarding engineering teams in batches. Fill out your setup below to join the early access queue.
               </p>
-              <button onClick={onClose} style={{
-                background: 'var(--primary)', color: '#fff', border: 'none',
-                borderRadius: 'var(--radius-md)', padding: '10px 24px',
-                fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer'
-              }}>Return Home</button>
             </div>
-          )}
 
-          {step === 'error' && (
-            <div style={{ textAlign: 'center', padding: '32px 0' }}>
-              <p style={{ color: 'var(--error)', marginBottom: '16px' }}>We couldn't submit your request. Please try again.</p>
-              <button onClick={() => setStep('form')} style={{
-                background: 'var(--primary)', color: '#fff', border: 'none',
-                borderRadius: 'var(--radius-md)', padding: '10px 24px',
-                fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer'
-              }}>Retry</button>
-            </div>
-          )}
-
-          {step === 'form' && (
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={labelStyle}>Full Name *</label>
-                  <input style={inputStyle} required placeholder="Jane Smith"
-                    value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Work Email *</label>
-                  <input style={inputStyle} type="email" required placeholder="jane@acme.com"
-                    value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} />
-                </div>
-              </div>
-
-              <div>
-                <label style={labelStyle}>Company *</label>
-                <input style={inputStyle} required placeholder="Acme Corp"
-                  value={form.company} onChange={e => setForm(f => ({...f, company: e.target.value}))} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={labelStyle}>Your Role</label>
-                  <select style={inputStyle} value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
-                    <option value="">Select role...</option>
-                    {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Company Size</label>
-                  <select style={inputStyle} value={form.companySize} onChange={e => setForm(f => ({...f, companySize: e.target.value}))}>
-                    <option value="">Select size...</option>
-                    {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label style={labelStyle}>What are you trying to solve?</label>
-                <textarea style={{...inputStyle, minHeight: '80px', resize: 'vertical'}}
-                  placeholder="e.g. Our engineers waste hours searching Slack and Jira for context..."
-                  value={form.useCase} onChange={e => setForm(f => ({...f, useCase: e.target.value}))} />
-              </div>
-
-              <button type="submit" disabled={loading} style={{
-                background: loading ? 'var(--text-muted)' : 'var(--primary)',
-                color: '#fff', border: 'none', borderRadius: 'var(--radius-md)',
-                padding: '12px 24px', fontSize: '1rem', fontWeight: 650,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                transition: 'background 150ms ease'
+            {errorMsg && (
+              <div style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '6px',
+                padding: '10px 14px',
+                fontSize: '0.84rem',
+                color: '#EF4444',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}>
-                {loading ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Submitting...</> : <>Get Early Access <ArrowRight size={16} /></>}
-              </button>
+                <AlertCircle size={16} />
+                <span>{errorMsg}</span>
+              </div>
+            )}
 
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                No spam. We'll only reach out when we're ready to onboard your team.
-              </p>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Honeypot field (hidden from view) */}
+              <div style={{ display: 'none' }} aria-hidden="true">
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex="-1"
+                  autoComplete="off"
+                  value={formData.website}
+                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                />
+              </div>
+
+              {/* Email (required) */}
+              <div>
+                <label htmlFor="ea-email" style={labelStyle}>
+                  Work Email <span style={{ color: 'var(--ind)' }}>*</span>
+                </label>
+                <input
+                  id="ea-email"
+                  type="email"
+                  required
+                  placeholder="you@company.com"
+                  style={inputStyle}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
+
+              {/* Name */}
+              <div>
+                <label htmlFor="ea-name" style={labelStyle}>
+                  Your Name
+                </label>
+                <input
+                  id="ea-name"
+                  type="text"
+                  placeholder="Sarah Chen"
+                  style={inputStyle}
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+
+              {/* Team Size */}
+              <div>
+                <label htmlFor="ea-size" style={labelStyle}>
+                  Team Size
+                </label>
+                <select
+                  id="ea-size"
+                  style={inputStyle}
+                  value={formData.team_size}
+                  onChange={(e) => setFormData({ ...formData, team_size: e.target.value })}
+                >
+                  {TEAM_SIZES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tools Used (Checkboxes) */}
+              <div>
+                <span style={labelStyle}>Tools Used</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginTop: '4px' }}>
+                  {TOOLS.map((t) => {
+                    const checked = formData.tools.includes(t);
+                    return (
+                      <label
+                        key={t}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: checked ? 'rgba(129, 140, 248, 0.12)' : 'var(--bg)',
+                          border: checked ? '1px solid var(--ind)' : '1px solid var(--line)',
+                          fontSize: '0.84rem',
+                          color: checked ? 'var(--ink)' : 'var(--mute)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => handleToolToggle(t)}
+                          style={{ accentColor: 'var(--ind)' }}
+                        />
+                        <span>{t}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Hinglish Usage */}
+              <div>
+                <span style={labelStyle}>Does your team write or converse in Hinglish?</span>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                  {HINGLISH_OPTIONS.map((opt) => {
+                    const active = formData.hinglish_use === opt.value;
+                    return (
+                      <button
+                        type="button"
+                        key={opt.value}
+                        onClick={() => setFormData({ ...formData, hinglish_use: opt.value })}
+                        style={{
+                          backgroundColor: active ? 'var(--ind)' : 'var(--bg)',
+                          color: active ? '#FFFFFF' : 'var(--mute)',
+                          border: active ? '1px solid var(--ind)' : '1px solid var(--line)',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '0.8rem',
+                          fontWeight: 500,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Optional message */}
+              <div>
+                <label htmlFor="ea-message" style={labelStyle}>
+                  Optional message
+                </label>
+                <textarea
+                  id="ea-message"
+                  rows={2}
+                  placeholder="Tell us about your team setup or primary use cases..."
+                  style={{ ...inputStyle, resize: 'vertical' }}
+                  value={formData.message}
+                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                />
+              </div>
+
+              {/* Plain language consent line */}
+              <div style={{
+                fontSize: '0.78rem',
+                color: 'var(--mute)',
+                lineHeight: 1.4,
+                paddingTop: '4px'
+              }}>
+                By submitting, you agree to receive communications regarding CognitRAG early access. We never sell your contact info.
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  backgroundColor: 'var(--ind)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '11px',
+                  fontSize: '0.92rem',
+                  fontWeight: 600,
+                  cursor: loading ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginTop: '8px',
+                  transition: 'opacity 0.15s ease'
+                }}
+                onMouseEnter={(e) => (e.target.style.opacity = '0.9')}
+                onMouseLeave={(e) => (e.target.style.opacity = '1')}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Submitting…
+                  </>
+                ) : (
+                  <>
+                    Request Early Access
+                    <ArrowRight size={16} />
+                  </>
+                )}
+              </button>
             </form>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '24px 8px' }}>
+            <div style={{
+              width: '52px',
+              height: '52px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(34, 197, 94, 0.12)',
+              color: 'var(--em)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px'
+            }}>
+              <CheckCircle2 size={28} />
+            </div>
+            <h3 className="font-serif-headline" style={{
+              fontSize: '1.5rem',
+              color: 'var(--ink)',
+              margin: '0 0 10px 0',
+              fontWeight: 400
+            }}>
+              Request Received
+            </h3>
+            <p style={{
+              fontSize: '0.9rem',
+              lineHeight: 1.6,
+              color: 'var(--mute)',
+              maxWidth: '380px',
+              margin: '0 auto 24px'
+            }}>
+              Thank you for requesting early access. If your submission is received, our engineering team will follow up shortly.
+            </p>
+            <button
+              onClick={onClose}
+              style={{
+                backgroundColor: 'var(--bg)',
+                border: '1px solid var(--line)',
+                borderRadius: '6px',
+                padding: '9px 20px',
+                color: 'var(--ink)',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

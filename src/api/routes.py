@@ -717,58 +717,118 @@ async def cancel_chat_stream(msg_id: str):
     return {"status": "cancelled", "msg_id": msg_id}
 
 
+# Rate limit tracking for early access submissions: {ip: [timestamps]}
+_early_access_ip_tracker: Dict[str, List[float]] = {}
+
 @router.post("/api/v1/early-access")
 async def submit_early_access(request: Request):
     import json
+    import re
+    import time
     from datetime import datetime
     import os
     import httpx
+
+    # 1. Rate limiting per IP: max 5 requests per 10 minutes
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    timestamps = _early_access_ip_tracker.get(client_ip, [])
+    # Filter out timestamps older than 600s (10 min)
+    timestamps = [t for t in timestamps if now - t < 600]
+    if len(timestamps) >= 5:
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    timestamps.append(now)
+    _early_access_ip_tracker[client_ip] = timestamps
+
     try:
         data = await request.json()
     except Exception:
-        data = {}
-    lead = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "name": data.get("name", ""),
-        "email": data.get("email", ""),
-        "company": data.get("company", ""),
-        "role": data.get("role", ""),
-        "companySize": data.get("companySize", ""),
-        "useCase": data.get("useCase", ""),
+        raise HTTPException(status_code=422, detail="Invalid JSON payload.")
+
+    # 2. Honeypot check (field 'website' or 'company_url')
+    if data.get("website") or data.get("company_url"):
+        # Silently succeed for bots without storing
+        return {
+            "status": "ok",
+            "message": "Thank you for requesting early access. If your submission is received, our engineering team will follow up shortly."
+        }
+
+    # 3. Server-side validation
+    email = str(data.get("email", "")).strip().lower()
+    if not email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(status_code=422, detail="A valid corporate email address is required.")
+
+    name = str(data.get("name", "")).strip()
+    team_size = str(data.get("team_size") or data.get("companySize", "")).strip()
+    tools = data.get("tools", [])
+    if isinstance(tools, str):
+        tools = [t.strip() for t in tools.split(",") if t.strip()]
+    hinglish_use = str(data.get("hinglish_use", "")).strip()
+    message = str(data.get("message") or data.get("useCase", "")).strip()
+
+    lead_record = {
+        "email": email,
+        "name": name,
+        "team_size": team_size,
+        "tools": tools,
+        "hinglish_use": hinglish_use,
+        "message": message,
+        "source": "homepage"
     }
-    with open("early_access_leads.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps(lead) + "\n")
-    print(f"[Early Access] New lead: {lead['email']} from {lead['company']}")
-    
-    # Send email via Web3Forms
+
+    # 4. Insert into database table early_access_signups (if migrated)
+    try:
+        admin_db = supabase_manager.get_admin_client()
+        admin_db.table("early_access_signups").upsert(
+            lead_record,
+            on_conflict="email"
+        ).execute()
+    except Exception as db_err:
+        logger.warning(f"[Early Access DB] Notice: {db_err}. Storing in persistent JSONL log.")
+
+    # 5. Always persist to append-only JSONL log
+    try:
+        with open("early_access_leads.jsonl", "a", encoding="utf-8") as f:
+            log_entry = dict(lead_record)
+            log_entry["timestamp"] = datetime.utcnow().isoformat()
+            log_entry["client_ip"] = client_ip
+            f.write(json.dumps(log_entry) + "\n")
+    except Exception as log_err:
+        logger.error(f"[Early Access File] Could not write to leads log: {log_err}")
+
+    # 6. Optional notification via Web3Forms if configured
     web3forms_key = os.environ.get("WEB3FORMS_ACCESS_KEY")
     if web3forms_key:
         try:
             async with httpx.AsyncClient() as client:
                 msg_body = (
-                    f"New Lead Submission!\n\n"
-                    f"Name: {lead['name']}\n"
-                    f"Email: {lead['email']}\n"
-                    f"Company: {lead['company']}\n"
-                    f"Role: {lead['role']}\n"
-                    f"Company Size: {lead['companySize']}\n"
-                    f"Use Case: {lead['useCase']}\n"
-                    f"Timestamp: {lead['timestamp']}"
+                    f"New Early Access Lead!\n\n"
+                    f"Name: {name}\n"
+                    f"Email: {email}\n"
+                    f"Team Size: {team_size}\n"
+                    f"Tools: {', '.join(tools)}\n"
+                    f"Hinglish Use: {hinglish_use}\n"
+                    f"Message: {message}\n"
+                    f"Timestamp: {datetime.utcnow().isoformat()}"
                 )
                 payload = {
                     "access_key": web3forms_key,
                     "subject": "New CognitRAG Early Access Lead",
                     "from_name": "CognitRAG System",
-                    "name": lead["name"] or "Early Access Lead",
-                    "email": lead["email"],
+                    "name": name or "Early Access Lead",
+                    "email": email,
                     "message": msg_body
                 }
-                res = await client.post("https://api.web3forms.com/submit", json=payload)
-                print(f"[Web3Forms] Status: {res.status_code}, Response: {res.text}")
+                await client.post("https://api.web3forms.com/submit", json=payload)
         except Exception as e:
-            print(f"[Web3Forms] Error sending email: {e}")
-            
-    return {"status": "ok", "message": "You are on the list!"}
+            logger.warning(f"[Web3Forms] Error notifying: {e}")
+
+    # 7. Confirmation message that does not reveal whether email was already registered
+    return {
+        "status": "ok",
+        "message": "Thank you for requesting early access. If your submission is received, our engineering team will follow up shortly."
+    }
+
 
 
 @router.post("/api/v1/voice/transcribe")

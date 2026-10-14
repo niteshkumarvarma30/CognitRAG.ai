@@ -1,233 +1,248 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Search, CheckCircle2, Sparkles, ArrowRight, ShieldCheck, Database, Cpu, MessageSquare, FileText, GitBranch, Bot, Network } from 'lucide-react';
-import ThreeDCompanyBrain from './ThreeDCompanyBrain';
-import VisitorCounterBadge from './VisitorCounterBadge';
+import dynamic from 'next/dynamic';
+import { ArrowRight, ShieldCheck } from 'lucide-react';
 
-export default function HeroSection({ onEarlyAccess, onGetStarted }) {
+const HeroGraph3D = dynamic(() => import('./HeroGraph3D'), { ssr: false });
+
+export default function HeroSection({ onOpenEarlyAccess }) {
+  const [canLoad3D, setCanLoad3D] = useState(false);
+
+  useEffect(() => {
+    // Check criteria for 3D upgrade:
+    // 1. Desktop viewport (> 820px)
+    // 2. Not prefers-reduced-motion
+    // 3. Not saveData mode
+    // 4. WebGL supported
+    if (typeof window === 'undefined') return;
+
+    const isDesktop = window.innerWidth >= 820;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const saveData = navigator.connection && navigator.connection.saveData;
+
+    let hasWebGL = false;
+    try {
+      const canvas = document.createElement('canvas');
+      hasWebGL = !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+    } catch {
+      hasWebGL = false;
+    }
+
+    if (isDesktop && !prefersReducedMotion && !saveData && hasWebGL) {
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(() => setCanLoad3D(true));
+      } else {
+        setTimeout(() => setCanLoad3D(true), 1200);
+      }
+    }
+  }, []);
+
   return (
     <section style={{
-      width: '100%',
-      minHeight: 'calc(100vh - 72px)',
-      position: 'relative',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingTop: '48px',
-      paddingBottom: '48px',
-      background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(234, 88, 12, 0.08), rgba(248, 247, 244, 0))',
-      paddingLeft: '24px',
-      paddingRight: '24px',
-      boxSizing: 'border-box'
+      padding: 'clamp(48px, 8vw, 84px) 0 48px',
+      position: 'relative'
     }}>
-      {/* Subtle modern background grid */}
-      <div style={{
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
-        backgroundImage: 'radial-gradient(rgba(24, 24, 27, 0.06) 1px, transparent 1px)',
-        backgroundSize: '28px 28px',
-        pointerEvents: 'none',
-        maskImage: 'radial-gradient(ellipse 70% 60% at 50% 50%, #000 70%, transparent 100%)',
-        WebkitMaskImage: 'radial-gradient(ellipse 70% 60% at 50% 50%, #000 70%, transparent 100%)',
-        zIndex: 0
-      }} />
-
-      <div style={{
-        position: 'relative',
-        zIndex: 1,
-        maxWidth: '1320px',
-        width: '100%',
+      <div className="landing-container" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
-        alignItems: 'center',
-        gap: '2.5rem'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gap: '40px',
+        alignItems: 'center'
       }}>
-
-        {/* Left Side: Hero Brand Pitch & Large CognitRAG Typography */}
-        <div style={{ pointerEvents: 'auto' }}>
-
-          {/* Live Visitor & Profile Views Counter */}
-          <VisitorCounterBadge mode="hero" />
-
-          {/* CognitRAG (Prominent Big Brand Title) */}
-          <div style={{ marginBottom: '14px' }}>
+        {/* Left Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Eyebrow */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: 'var(--ind)',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase'
+          }}>
             <span style={{
-              fontSize: 'clamp(3.3rem, 5.5vw, 4.75rem)',
-              fontWeight: 900,
-              letterSpacing: '-0.04em',
-              color: '#18181B',
-              lineHeight: 1.05,
-              display: 'inline-block'
-            }}>
-              Cognit<span style={{
-                background: 'linear-gradient(135deg, #635BFF 0%, #7C3AED 50%, #06B6D4 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
-              }}>RAG</span>
-            </span>
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--ind)'
+            }} />
+            For Hinglish-speaking engineering teams
           </div>
 
-          {/* Headline Text Below */}
-          <h1 style={{
-            fontSize: 'clamp(1.35rem, 2.1vw, 1.85rem)',
-            fontWeight: 700,
-            letterSpacing: '-0.025em',
-            lineHeight: 1.3,
-            color: '#27272A',
-            margin: '0 0 16px 0'
+          {/* Headline */}
+          <h1 className="font-serif-headline" style={{
+            fontSize: 'clamp(2.4rem, 5vw, 3.6rem)',
+            lineHeight: 1.15,
+            letterSpacing: '-0.02em',
+            color: 'var(--ink)',
+            margin: 0,
+            fontWeight: 400
           }}>
-            The Multilingual Intelligence Layer for{' '}
-            <span style={{ 
-              background: 'linear-gradient(135deg, #635BFF 0%, #7C3AED 50%, #EA580C 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              fontWeight: 800,
-              display: 'inline-block'
-            }}>
-              Modern Enterprises & Developers.
-            </span>
+            Your team&apos;s memory, with&nbsp;proof.
           </h1>
 
-          {/* Hero Subtitle Description */}
+          {/* Lead Paragraph */}
           <p style={{
-            color: '#52525B',
-            fontSize: '1.05rem',
-            lineHeight: 1.65,
-            maxWidth: '560px',
-            margin: '0 0 28px 0',
-            fontWeight: 450
+            fontSize: '1.1rem',
+            lineHeight: 1.6,
+            color: 'var(--mute)',
+            margin: 0,
+            maxWidth: '520px'
           }}>
-            Cross-platform knowledge search that understands Hinglish, extracts scanned Indian documents via Sarvam AI, and verifies every claim through an 8-Stage White-Box Knowledge Graph with 98.2% audited faithfulness.
+            CognitRAG connects Slack, GitHub, Jira and Notion to give engineering teams verifiable answers. Every claim is tagged with exact source evidence, whether asked in English or mixed Hinglish.
           </p>
 
-          {/* CTA Action Buttons */}
-          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginBottom: '28px' }}>
-            <button 
-              onClick={() => onGetStarted ? onGetStarted() : onEarlyAccess ? onEarlyAccess() : null}
+          {/* CTAs */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '14px',
+            paddingTop: '8px'
+          }}>
+            <button
+              onClick={onOpenEarlyAccess}
               style={{
-                backgroundColor: '#18181B',
-                color: '#ffffff',
+                backgroundColor: 'var(--ind)',
+                color: '#FFFFFF',
                 border: 'none',
-                borderRadius: 'var(--radius-pill)',
-                padding: '15px 30px',
+                borderRadius: '8px',
+                padding: '12px 22px',
                 fontSize: '0.95rem',
-                fontWeight: 650,
+                fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: '0 4px 18px rgba(0, 0, 0, 0.14)',
-                transition: 'all 0.2s ease',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '10px'
+                gap: '8px',
+                transition: 'opacity 0.15s ease'
               }}
-              onMouseOver={(e) => e.currentTarget.style.background = '#27272A'}
-              onMouseOut={(e) => e.currentTarget.style.background = '#18181B'}
+              onMouseEnter={(e) => (e.target.style.opacity = '0.9')}
+              onMouseLeave={(e) => (e.target.style.opacity = '1')}
             >
-              <span style={{
-                width: '22px', height: '22px', borderRadius: '50%', background: '#635BFF',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff'
-              }}>
-                <ArrowRight size={13} />
-              </span>
-              Get Started Free
+              Get early access
+              <ArrowRight size={16} />
             </button>
-            <a href="#personas" style={{
-              backgroundColor: '#FFFFFF',
-              color: '#18181B',
-              border: '1px solid #E4E4E7',
-              borderRadius: 'var(--radius-pill)',
-              padding: '15px 26px',
-              fontSize: '0.95rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              textDecoration: 'none',
-              display: 'inline-flex', 
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s ease',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
-            }}
-            onMouseOver={(e) => e.target.style.background = '#F8FAFC'}
-            onMouseOut={(e) => e.target.style.background = '#FFFFFF'}
+
+            <a
+              href="#demo"
+              style={{
+                color: 'var(--ink)',
+                textDecoration: 'none',
+                border: '1px solid var(--line)',
+                borderRadius: '8px',
+                padding: '12px 20px',
+                fontSize: '0.95rem',
+                fontWeight: 500,
+                backgroundColor: 'var(--bg2)',
+                transition: 'border-color 0.15s ease'
+              }}
+              onMouseEnter={(e) => (e.target.style.borderColor = 'var(--ind)')}
+              onMouseLeave={(e) => (e.target.style.borderColor = 'var(--line)')}
             >
-              Explore 3 Personas <ArrowRight size={15} color="#635BFF" />
+              See a sample answer
             </a>
           </div>
 
-          {/* Proof Metrics Strip — Actual Audited Benchmark */}
+          {/* Privacy Note */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '16px',
-            background: 'rgba(255, 255, 255, 0.85)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            border: '1px solid rgba(228, 228, 231, 0.85)',
-            borderRadius: '16px',
-            padding: '14px 20px',
-            marginBottom: '22px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
-            maxWidth: '540px'
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '0.82rem',
+            color: 'var(--mute)',
+            paddingTop: '4px'
           }}>
-            <div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 850, color: '#18181B', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-                &lt;50ms
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#71717A', fontWeight: 550, marginTop: '3px' }}>
-                Graph Retrieval
-              </div>
-            </div>
-            <div style={{ borderLeft: '1px solid rgba(228, 228, 231, 0.85)', paddingLeft: '14px' }}>
-              <div style={{ fontSize: '1.35rem', fontWeight: 850, color: '#635BFF', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-                98.2%
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#71717A', fontWeight: 550, marginTop: '3px' }}>
-                Audited Faithfulness
-              </div>
-            </div>
-            <div style={{ borderLeft: '1px solid rgba(228, 228, 231, 0.85)', paddingLeft: '14px' }}>
-              <div style={{ fontSize: '1.35rem', fontWeight: 850, color: '#16A34A', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-                100%
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#71717A', fontWeight: 550, marginTop: '3px' }}>
-                Citation Precision
-              </div>
-            </div>
-          </div>
-
-          {/* Micro trust indicators */}
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.8125rem', color: '#71717A', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <Sparkles size={14} color="#635BFF" /> Sarvam Indic AI Native
-            </span>
-            <span style={{ fontSize: '0.8125rem', color: '#71717A', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <ShieldCheck size={14} color="#16a34a" /> 0.024 Brier Calibration
-            </span>
-            <span style={{ fontSize: '0.8125rem', color: '#71717A', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <Database size={14} color="#06B6D4" /> Neo4j + pgvector Hybrid
-            </span>
-            <span style={{ fontSize: '0.8125rem', color: '#71717A', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <CheckCircle2 size={14} color="#EA580C" /> 0 ACL Leaks (15/15 Passed)
-            </span>
+            <ShieldCheck size={16} style={{ color: 'var(--em)', flexShrink: 0 }} />
+            <span>Private by default: only answers from sources you can already open.</span>
           </div>
         </div>
 
-        {/* Right Side: Seamless 3D WebGL Three.js Brain (NO separate square section) */}
+        {/* Right Column: Hero Graph (SVG or 3D upgrade) */}
         <div style={{
-          position: 'relative',
-          width: '100%',
           display: 'flex',
-          flexDirection: 'column',
+          justifyContent: 'center',
           alignItems: 'center',
-          justifyContent: 'center'
+          minHeight: '360px',
+          position: 'relative'
         }}>
-          <ThreeDCompanyBrain />
+          {canLoad3D ? (
+            <HeroGraph3D />
+          ) : (
+            <svg
+              viewBox="0 0 420 360"
+              style={{
+                width: '100%',
+                maxWidth: '420px',
+                height: 'auto',
+                overflow: 'visible'
+              }}
+              aria-label="CognitRAG Graph connecting Slack, GitHub, Jira, and Notion to a central intelligence node"
+            >
+              <defs>
+                <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="var(--line)" />
+                  <stop offset="100%" stopColor="var(--ind)" stopOpacity="0.8" />
+                </linearGradient>
+              </defs>
+
+              {/* Connecting Lines */}
+              <g className="hero-svg-lines">
+                <line x1="90" y1="80" x2="210" y2="180" stroke="url(#lineGrad)" strokeWidth="2" strokeDasharray="5,5" />
+                <line x1="330" y1="80" x2="210" y2="180" stroke="url(#lineGrad)" strokeWidth="2" strokeDasharray="5,5" />
+                <line x1="90" y1="280" x2="210" y2="180" stroke="url(#lineGrad)" strokeWidth="2" strokeDasharray="5,5" />
+                <line x1="330" y1="280" x2="210" y2="180" stroke="url(#lineGrad)" strokeWidth="2" strokeDasharray="5,5" />
+              </g>
+
+              {/* Source Nodes */}
+              {/* Slack */}
+              <g transform="translate(90, 80)">
+                <circle r="26" fill="var(--bg2)" stroke="var(--line)" strokeWidth="1.5" />
+                <text textAnchor="middle" dy="4" fill="var(--cy)" fontSize="11" fontWeight="600" fontFamily="sans-serif">Slack</text>
+              </g>
+
+              {/* GitHub */}
+              <g transform="translate(330, 80)">
+                <circle r="26" fill="var(--bg2)" stroke="var(--line)" strokeWidth="1.5" />
+                <text textAnchor="middle" dy="4" fill="var(--ind)" fontSize="11" fontWeight="600" fontFamily="sans-serif">GitHub</text>
+              </g>
+
+              {/* Jira */}
+              <g transform="translate(90, 280)">
+                <circle r="26" fill="var(--bg2)" stroke="var(--line)" strokeWidth="1.5" />
+                <text textAnchor="middle" dy="4" fill="var(--em)" fontSize="11" fontWeight="600" fontFamily="sans-serif">Jira</text>
+              </g>
+
+              {/* Notion */}
+              <g transform="translate(330, 280)">
+                <circle r="26" fill="var(--bg2)" stroke="var(--line)" strokeWidth="1.5" />
+                <text textAnchor="middle" dy="4" fill="var(--am)" fontSize="11" fontWeight="600" fontFamily="sans-serif">Notion</text>
+              </g>
+
+              {/* Centre CognitRAG Node */}
+              <g transform="translate(210, 180)">
+                <circle r="42" fill="var(--bg2)" stroke="var(--ind)" strokeWidth="2.5" />
+                <circle r="36" fill="rgba(129, 140, 248, 0.12)" />
+                <text textAnchor="middle" dy="-2" fill="var(--ink)" fontSize="13" fontWeight="700" fontFamily="sans-serif">CognitRAG</text>
+                <text textAnchor="middle" dy="14" fill="var(--mute)" fontSize="9" fontWeight="500" fontFamily="sans-serif">Memory Engine</text>
+              </g>
+            </svg>
+          )}
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes dash {
+          to {
+            stroke-dashoffset: -20;
+          }
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          .hero-svg-lines line {
+            animation: dash 1.6s linear infinite;
+          }
+        }
+      `}</style>
     </section>
   );
 }
-
-
-

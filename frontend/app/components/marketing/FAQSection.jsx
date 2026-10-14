@@ -1,75 +1,107 @@
 'use client';
-import React, { useState } from 'react';
+import React from 'react';
 import { ChevronDown } from 'lucide-react';
 
 export default function FAQSection() {
-  const [openIndex, setOpenIndex] = useState(null);
-
   const faqs = [
-    { 
-      q: 'What is a Company Brain?', 
-      a: 'A Company Brain connects all the knowledge scattered across your workplace tools—such as Slack, Jira, GitHub, and documents—into a single, trusted intelligence center. It enables your team and AI tools to get instant, verified answers without digging through endless files or message threads.' 
+    {
+      q: 'How does CognitRAG protect permissions from our existing tools?',
+      a: 'CognitRAG strictly enforces user-level permissions at retrieval time. For Slack and GitHub, access mirrors your account’s channel and repository memberships. For Jira and Notion, workspace admins set audience visibility rules. If an answer draws from a restricted source, the source is withheld and only counted.'
     },
-    { 
-      q: 'How is CognitRAG different from standard enterprise search?', 
-      a: 'Traditional search simply gives you a list of links and files to read through. CognitRAG understands how your projects, discussions, and decisions connect across different tools, delivering direct answers backed by clear citations you can verify.' 
+    {
+      q: 'Does CognitRAG train on our company data?',
+      a: 'No. Your code, issue tickets, pull requests, and chat logs are processed exclusively within your tenant namespace for indexing and retrieval. We never train public foundation models on your workspace data.'
     },
-    { 
-      q: 'How does CognitRAG ensure high accuracy compared to typical AI tools?', 
-      a: 'Typical AI tools often give generic or outdated answers because they treat documents in isolation. CognitRAG tracks the relationships between your teams, tasks, and historical decisions over time, ensuring every response is grounded in current organizational truth.' 
+    {
+      q: 'Can our team ask questions in Hinglish?',
+      a: 'Yes. Indian engineering teams frequently communicate in mixed Hindi and English (e.g. “staging pe 401 error kyu aa raha hai?”). CognitRAG is evaluated on code-switching technical phrasing to find the right PRs and tickets.'
     },
-    { 
-      q: 'Does CognitRAG make things up or hallucinate?', 
-      a: 'We prioritize truthfulness over guessing. If the required information is missing or unclear in your connected sources, CognitRAG will explicitly tell you that it does not have enough verified information rather than making assumptions. Every claim is linked directly to its source.' 
-    },
-    { 
-      q: 'How do you keep our company data secure and respect permissions?', 
-      a: 'CognitRAG strictly mirrors the permissions already configured in your workplace tools. If a team member does not have access to a private channel, restricted project, or confidential document in the original source, CognitRAG will never reveal that information to them.' 
-    },
-    { 
-      q: 'What workplace tools are supported?', 
-      a: 'We currently support Slack, GitHub, Jira, Notion, Google Workspace, and direct file uploads (including PDFs and documents). Integrations for Salesforce, Confluence, and Microsoft Teams are coming soon.' 
-    },
-    { 
-      q: 'Can our internal AI agents and tools connect to CognitRAG?', 
-      a: 'Yes. CognitRAG serves as a secure knowledge engine for your AI agents and custom internal tools, providing them with authorized company context while strictly enforcing your organization’s access policies.' 
-    },
-    { 
-      q: 'How do we get started?', 
-      a: 'Request early access and our team will set up a personalized onboarding session. Most teams can connect their first data source and begin querying within an hour.' 
+    {
+      q: 'How is a conflict detected between two documents?',
+      a: 'When two sources contradict each other—such as an outdated Notion PRD specifying local .env files versus a merged GitHub PR using AWS Secrets Manager—CognitRAG flags the older document with an amber conflict chip rather than blending outdated notes as truth.'
     }
   ];
 
   return (
-    <section id="faq" style={{ maxWidth: '780px', margin: '0 auto', padding: 'var(--space-20, 80px) var(--space-4, 16px)', scrollMarginTop: '80px' }}>
-      <h2 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-primary)', textAlign: 'center', marginBottom: 'var(--space-12, 48px)' }}>
-        Frequently Asked Questions
-      </h2>
-      
-      <div>
-        {faqs.map((faq, i) => (
-          <div key={i} style={{ borderBottom: '1px solid var(--border)', padding: '16px 0' }}>
-            <button 
-              onClick={() => setOpenIndex(openIndex === i ? null : i)}
-              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-primary)' }}
-            >
-              {faq.q}
-              <ChevronDown 
-                size={20} 
-                style={{ 
-                  transform: openIndex === i ? 'rotate(180deg)' : 'rotate(0deg)', 
-                  transition: 'transform var(--duration-normal, 250ms) var(--ease-out, ease)',
-                  color: 'var(--text-muted)'
-                }} 
-              />
-            </button>
-            {openIndex === i && (
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.6, paddingTop: '8px' }}>
-                {faq.a}
-              </div>
-            )}
+    <section id="faq" style={{
+      padding: '64px 0',
+      backgroundColor: 'var(--bg2)',
+      borderTop: '1px solid var(--line)'
+    }}>
+      <div className="landing-container">
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            color: 'var(--ind)',
+            letterSpacing: '0.04em',
+            marginBottom: '8px'
+          }}>
+            Questions
           </div>
-        ))}
+          <h2 className="font-serif-headline" style={{
+            fontSize: 'clamp(1.8rem, 3.5vw, 2.5rem)',
+            color: 'var(--ink)',
+            margin: '0 0 10px 0',
+            fontWeight: 400
+          }}>
+            Frequently asked questions
+          </h2>
+          <p style={{
+            color: 'var(--mute)',
+            fontSize: '0.96rem',
+            maxWidth: '520px',
+            margin: '0 auto'
+          }}>
+            Straightforward answers about our permissions, language models, and data security.
+          </p>
+        </div>
+
+        <div style={{
+          maxWidth: '740px',
+          margin: '0 auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }}>
+          {faqs.map((faq, i) => (
+            <details
+              key={i}
+              style={{
+                backgroundColor: 'var(--bg)',
+                border: '1px solid var(--line)',
+                borderRadius: '8px',
+                padding: '16px 20px',
+                cursor: 'pointer'
+              }}
+            >
+              <summary style={{
+                fontSize: '1rem',
+                fontWeight: 600,
+                color: 'var(--ink)',
+                listStyle: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                userSelect: 'none'
+              }}>
+                <span>{faq.q}</span>
+                <ChevronDown size={18} style={{ color: 'var(--mute)', flexShrink: 0 }} />
+              </summary>
+              <p style={{
+                marginTop: '12px',
+                marginBottom: 0,
+                fontSize: '0.92rem',
+                lineHeight: 1.6,
+                color: 'var(--mute)'
+              }}>
+                {faq.a}
+              </p>
+            </details>
+          ))}
+        </div>
       </div>
     </section>
   );

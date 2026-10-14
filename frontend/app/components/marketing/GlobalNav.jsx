@@ -1,205 +1,172 @@
 'use client';
 import React, { useState } from 'react';
-import { Sparkles, Menu, X } from 'lucide-react';
 import Link from 'next/link';
+import { Menu, X, ShieldCheck } from 'lucide-react';
 
-export default function GlobalNav({ onEarlyAccess }) {
+export default function GlobalNav({ onOpenEarlyAccess }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navLinks = [
-    { label: 'Personas', href: '#personas' },
-    { label: 'Architecture', href: '#how-it-works' },
-    { label: 'Benchmarks', href: '#benchmarks' },
-    { label: 'Solutions', href: '#solutions' },
-    { label: 'Pricing', href: '#pricing' },
-    { label: 'FAQ', href: '#faq' }
+    { label: 'Demo', href: '#demo' },
+    { label: 'Connections', href: '#connections' },
+    { label: 'Privacy', href: '#privacy' },
+    { label: 'Plans', href: '#plans' }
   ];
 
   return (
-    <nav style={{
+    <header style={{
       position: 'sticky',
       top: 0,
       zIndex: 100,
-      backdropFilter: 'blur(16px)',
-      backgroundColor: 'rgba(248, 247, 244, 0.92)',
-      borderBottom: '1px solid var(--border)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '0 clamp(16px, 4vw, 24px)'
+      backgroundColor: 'rgba(8, 11, 20, 0.85)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+      borderBottom: '1px solid var(--line)',
+      paddingTop: 'env(safe-area-inset-top, 0px)'
     }}>
-      <div style={{
+      <div className="landing-container" style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        width: '100%',
-        maxWidth: '1200px',
-        height: '64px'
+        height: '60px'
       }}>
-        {/* Left: Brand Logo */}
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+        {/* Brand */}
+        <Link href="/" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          textDecoration: 'none',
+          color: 'var(--ink)'
+        }}>
           <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '9px',
-            background: '#18181B',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            width: '28px',
+            height: '28px',
+            borderRadius: '6px',
+            background: 'var(--ind)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#EA580C',
-            flexShrink: 0
+            color: '#FFFFFF'
           }}>
-            <Sparkles size={18} />
+            <ShieldCheck size={16} />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ 
-              fontWeight: 850, 
-              fontSize: '1.25rem', 
-              letterSpacing: '-0.03em', 
-              color: 'var(--text-primary)',
-              lineHeight: 1.1
-            }}>
-              CognitRAG
-            </span>
-            <span style={{ fontSize: '0.625rem', fontWeight: 750, color: 'var(--primary)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Multilingual Brain
-            </span>
-          </div>
+          <span style={{
+            fontWeight: 700,
+            fontSize: '1.05rem',
+            letterSpacing: '-0.02em',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
+          }}>
+            CognitRAG<span style={{ color: 'var(--ind)' }}>.ai</span>
+          </span>
         </Link>
 
-        {/* Center: Nav links (Desktop only) */}
-        <div className="desktop-only" style={{ alignItems: 'center', gap: '28px' }}>
-          {navLinks.map(item => (
-            <a key={item.label} href={item.href} style={{
-              color: 'var(--text-secondary)',
-              textDecoration: 'none',
-              fontSize: '0.875rem',
-              fontWeight: 550,
-              transition: 'color var(--duration-fast) var(--ease-out)'
-            }}
-            onMouseOver={(e) => e.target.style.color = 'var(--text-primary)'}
-            onMouseOut={(e) => e.target.style.color = 'var(--text-secondary)'}
+        {/* Desktop Navigation */}
+        <nav style={{
+          display: 'none',
+          alignItems: 'center',
+          gap: '24px'
+        }} className="desktop-nav">
+          {navLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              style={{
+                color: 'var(--mute)',
+                textDecoration: 'none',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                transition: 'color 0.15s ease'
+              }}
+              onMouseEnter={(e) => (e.target.style.color = 'var(--ink)')}
+              onMouseLeave={(e) => (e.target.style.color = 'var(--mute)')}
             >
-              {item.label}
+              {link.label}
             </a>
           ))}
-        </div>
+        </nav>
 
-        {/* Right: Actions (Desktop only) */}
-        <div className="desktop-only" style={{ alignItems: 'center', gap: '16px' }}>
-          <Link href="/sign-in" style={{
-            color: 'var(--text-secondary)',
-            textDecoration: 'none',
-            fontSize: '0.875rem',
-            fontWeight: 550
-          }}>
-            Sign In
-          </Link>
+        {/* CTA and Mobile toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
-            onClick={onEarlyAccess}
+            onClick={onOpenEarlyAccess}
             style={{
-              backgroundColor: '#18181B',
+              backgroundColor: 'var(--ind)',
               color: '#FFFFFF',
               border: 'none',
-              borderRadius: 'var(--radius-pill)',
-              padding: '8px 20px',
-              fontSize: '0.875rem',
-              fontWeight: 650,
+              borderRadius: '6px',
+              padding: '7px 14px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
               cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+              transition: 'opacity 0.15s ease'
             }}
+            onMouseEnter={(e) => (e.target.style.opacity = '0.9')}
+            onMouseLeave={(e) => (e.target.style.opacity = '1')}
           >
-            Get CognitRAG
+            Get early access
+          </button>
+
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Toggle navigation menu"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--line)',
+              borderRadius: '6px',
+              padding: '6px',
+              color: 'var(--ink)',
+              display: 'flex',
+              cursor: 'pointer'
+            }}
+            className="mobile-toggle"
+          >
+            {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
-
-        {/* Mobile Hamburger Trigger (Mobile only) */}
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          className="mobile-only"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-primary)',
-            cursor: 'pointer',
-            padding: '8px',
-            borderRadius: '6px',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          aria-label="Toggle navigation menu"
-        >
-          {mobileOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
       </div>
 
-      {/* Mobile Dropdown Menu */}
+      {/* Mobile Drawer */}
       {mobileOpen && (
         <div style={{
-          width: '100%',
-          padding: '16px 0 20px',
-          borderTop: '1px solid var(--border)',
+          backgroundColor: 'var(--bg2)',
+          borderBottom: '1px solid var(--line)',
+          padding: '16px 20px',
           display: 'flex',
           flexDirection: 'column',
           gap: '12px'
-        }} className="mobile-only">
-          {navLinks.map(item => (
+        }} className="mobile-drawer">
+          {navLinks.map((link) => (
             <a
-              key={item.label}
-              href={item.href}
+              key={link.label}
+              href={link.href}
               onClick={() => setMobileOpen(false)}
               style={{
-                color: 'var(--text-primary)',
+                color: 'var(--ink)',
                 textDecoration: 'none',
                 fontSize: '0.95rem',
-                fontWeight: 600,
-                padding: '8px 4px'
+                fontWeight: 500,
+                padding: '6px 0'
               }}
             >
-              {item.label}
+              {link.label}
             </a>
           ))}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-            <Link
-              href="/sign-in"
-              onClick={() => setMobileOpen(false)}
-              style={{
-                flex: 1,
-                textAlign: 'center',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                color: 'var(--text-primary)',
-                textDecoration: 'none',
-                fontWeight: 600,
-                fontSize: '0.875rem'
-              }}
-            >
-              Sign In
-            </Link>
-            <button
-              onClick={() => { setMobileOpen(false); onEarlyAccess?.(); }}
-              style={{
-                flex: 1,
-                padding: '10px',
-                borderRadius: '8px',
-                background: '#18181B',
-                color: '#FFFFFF',
-                border: 'none',
-                fontWeight: 650,
-                fontSize: '0.875rem',
-                cursor: 'pointer'
-              }}
-            >
-              Get CognitRAG
-            </button>
-          </div>
         </div>
       )}
-    </nav>
+
+      <style jsx>{`
+        @media (min-width: 680px) {
+          .desktop-nav {
+            display: flex !important;
+          }
+          .mobile-toggle {
+            display: none !important;
+          }
+          .mobile-drawer {
+            display: none !important;
+          }
+        }
+      `}</style>
+    </header>
   );
 }
