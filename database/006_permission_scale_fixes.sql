@@ -22,6 +22,9 @@
 
 BEGIN;
 
+-- Increase maintenance memory for HNSW vector index construction (default 32MB is too low for 1024-dim vectors)
+SET maintenance_work_mem = '128MB';
+
 -- ---------------------------------------------------------------------------
 -- A. Tenants: map Clerk organizations (Teams) and owners (Solo) to tenants
 -- ---------------------------------------------------------------------------
