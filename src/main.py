@@ -12,6 +12,10 @@ from src.api.security_routes import router as security_router
 from src.api.billing_routes import router as billing_router
 from src.api.admin_routes import router as admin_router
 from src.api.bot_routes import router as bot_router
+from src.api.webhooks import router as webhooks_router
+from src.api.audit import router as audit_router
+from src.api.sources import router as sources_router
+from src.api.feedback import router as feedback_router
 import os
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
@@ -23,9 +27,9 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="CognitRAG API",
-    description="Multilingual GraphRAG Company Brain — Hinglish-native, claim-level citation audit",
-    version="2.0.0",
+    title="CognitRAG v5 API",
+    description="Multilingual GraphRAG Company Brain — Permission-aware retrieval, fail-closed security, and citation audit",
+    version="5.0.0",
     lifespan=lifespan
 )
 
@@ -45,7 +49,11 @@ app.include_router(memory_router)
 app.include_router(ingestion_router)
 app.include_router(integration_router)
 app.include_router(admin_router)
-app.include_router(bot_router)   # Slack App webhooks + contradiction API
+app.include_router(bot_router)
+app.include_router(webhooks_router)
+app.include_router(audit_router)
+app.include_router(sources_router)
+app.include_router(feedback_router)
 
 @app.get("/health")
 def health_check():

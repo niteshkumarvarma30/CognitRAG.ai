@@ -524,7 +524,10 @@ def ingest_jira(request: JiraIngestRequest, background_tasks: BackgroundTasks):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Jira ingestion failed: {e}")
 
-from src.integrations.gdrive_crawler import GDriveCrawler
+try:
+    from src._deferred.gdrive.gdrive_crawler import GDriveCrawler
+except ImportError:
+    GDriveCrawler = None
 
 class GDriveIngestRequest(BaseModel):
     tenant_id: str
