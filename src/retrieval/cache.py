@@ -61,3 +61,27 @@ class LRUCache:
             "hit_rate": round(self.hits / total, 2) if total else 0.0,
             "size": len(self.cache)
         }
+
+from src.database.repos.cache import lookup_cache as db_lookup_cache
+from src.database.repos.cache import save_cache as db_save_cache
+from src.database.repos.context import RequestContext
+
+async def check_semantic_cache(
+    ctx: RequestContext,
+    query_embedding: list[float],
+    threshold: float = 0.95,
+    entity_guard: list[str] = None
+) -> dict | None:
+    """Audience-isolated semantic cache lookup."""
+    return await db_lookup_cache(ctx, query_embedding, threshold=threshold, entity_guard=entity_guard)
+
+async def store_semantic_cache(
+    ctx: RequestContext,
+    query: str,
+    response: str,
+    query_embedding: list[float],
+    entity_guard: list[str] = None,
+    ttl_seconds: int = None
+) -> bool:
+    """Audience-isolated semantic cache write."""
+    return await db_save_cache(ctx, query, response, query_embedding, entity_guard=entity_guard, ttl_seconds=ttl_seconds)

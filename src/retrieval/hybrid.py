@@ -72,65 +72,48 @@ def get_embedding(text: str, language_tag: str = "en") -> list[float]:
     return vec
 
 def vector_search(tenant_id: str, query: str, query_embedding: list[float], top_k: int = 20, user_id: str = None, user_permissions: list[str] = None) -> list[dict]:
-    """Cosine Similarity search using pgvector via custom RPC with ACL filtering."""
+    """Cosine Similarity search using pgvector via custom RPC with fail-closed permission filtering."""
+    if not user_permissions:
+        # Strict fail-closed: empty permissions = 0 visible chunks
+        return []
+
     db = supabase_manager.get_admin_client()
-    if user_permissions is None:
-        user_permissions = ["public"]
     try:
-        # Check if RPC accepts 4 or 3 params
-        try:
-            rpc_params = {
-                "query_embedding": query_embedding,
-                "match_count": top_k,
-                "p_tenant_id": tenant_id
-            }
-            response = db.rpc("match_document_chunks", rpc_params).execute()
-        except Exception as e3:
-            rpc_params["p_user_permissions"] = user_permissions
-            response = db.rpc("match_document_chunks", rpc_params).execute()
+        rpc_params = {
+            "query_embedding": query_embedding,
+            "match_count": top_k,
+            "p_tenant_id": tenant_id,
+            "p_user_permissions": user_permissions,
+        }
+        dim = len(query_embedding)
+        rpc_name = "match_document_chunks_768" if dim == 768 else "match_document_chunks"
+        response = db.rpc(rpc_name, rpc_params).execute()
         return response.data if response.data else []
     except Exception as e:
         print(f"Vector search failed: {e}")
         return []
 
 def keyword_search(tenant_id: str, query: str, top_k: int = 20, user_id: str = None, user_permissions: list[str] = None) -> list[dict]:
-    """BM25 equivalent using Postgres Full Text Search with ACL filtering."""
+    """BM25 equivalent using Postgres keyword_search_chunks RPC with GIN index and fail-closed security."""
+    if not user_permissions:
+        return []
+
     db = supabase_manager.get_admin_client()
-    if user_permissions is None:
-        user_permissions = ["public"]
     try:
-        # The python client does not support type='websearch', so we manually build an OR query
-        words = [word.lower() for word in query.replace("?", "").replace(",", "").split() if len(word) > 3]
+        import re
+        words = re.findall(r"\b[a-zA-Z0-9_\-\.]{2,}\b", query)
         if not words:
             return []
-        fts_query = " | ".join(words)
-        
-        is_eval = "eval" in str(tenant_id).lower() or str(tenant_id).lower().startswith("e0a1")
-        chunks_table = "eval_document_chunks" if is_eval else "document_chunks"
-        try:
-            response = db.table(chunks_table) \
-                .select("id, content, parent_id, entities, graph_score, relationship_types, allowed_entities") \
-                .eq("tenant_id", tenant_id) \
-                .ov("allowed_entities", user_permissions) \
-                .text_search("content", fts_query) \
-                .execute()
-        except Exception:
-            # Fallback to standard search if allowed_entities column or ov operator is pending
-            response = db.table(chunks_table) \
-                .select("id, content, parent_id, entities, graph_score, relationship_types") \
-                .eq("tenant_id", tenant_id) \
-                .text_search("content", fts_query) \
-                .execute()
-            
-        results = []
-        if response.data:
-            for row in response.data[:top_k]:
-                allowed = row.get("allowed_entities")
-                if allowed and not ("public" in allowed or any(p in allowed for p in user_permissions)):
-                    continue
-                row["boost_factor"] = 1.0
-                results.append(row)
-        return results
+        sanitized_tsquery = " | ".join(words[:15])
+
+        rpc_params = {
+            "p_tsquery": sanitized_tsquery,
+            "match_count": top_k,
+            "p_tenant_id": tenant_id,
+            "p_user_permissions": user_permissions,
+        }
+        response = db.rpc("keyword_search_chunks", rpc_params).execute()
+        return response.data if response.data else []
     except Exception as e:
         print(f"Keyword search failed: {e}")
         return []
@@ -196,8 +179,8 @@ def exact_identifier_search(tenant_id: str, query: str, top_k: int = 5, user_per
     if not matches:
         return []
     
-    if user_permissions is None:
-        user_permissions = ["public"]
+    if not user_permissions:
+        return []
 
     target_type = detect_query_source_type(query)
     db = supabase_manager.get_admin_client()
@@ -246,7 +229,7 @@ def exact_identifier_search(tenant_id: str, query: str, top_k: int = 5, user_per
                         cid = str(row.get("id"))
                         if cid not in seen_ids:
                             allowed = row.get("allowed_entities")
-                            if allowed and not ("public" in allowed or any(p in allowed for p in user_permissions)):
+                            if allowed and not any(p in allowed for p in user_permissions):
                                 continue
                             seen_ids.add(cid)
                             # Verify source document type: boost chunks matching target query source
@@ -354,9 +337,9 @@ def hybrid_retriever(
     graph_weight: float = None,
     enable_identifier_bypass: bool = True
 ):
-    """Executes Vector, Keyword, Graph, and Identifier searches in parallel, and fuses them with RRF."""
-    if user_permissions is None:
-        user_permissions = ["public"]
+    if not user_permissions:
+        print("  -> Warning: hybrid_retriever called with empty user_permissions. Failing closed.")
+        return [], False
     print(f"  -> Running True Hybrid Search (Vector + Keyword + Neo4j Graph + Bypass) with ACL: {user_permissions}")
     
     # Defaults calibrated from empirical grid search (R1.1 winner)
