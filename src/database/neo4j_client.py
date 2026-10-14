@@ -17,6 +17,8 @@ class Neo4jManager:
             uri, 
             auth=(user, password),
             max_connection_lifetime=200, # Aura drops at ~300s
+            connection_timeout=3.0,
+            max_transaction_retry_time=2.0,
             keep_alive=True,
             max_connection_pool_size=50
         )

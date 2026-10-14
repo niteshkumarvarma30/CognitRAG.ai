@@ -6,41 +6,68 @@ export default function PricingSection({ onOpenEarlyAccess }) {
   const plans = [
     {
       name: 'Solo',
-      badge: 'Early Access',
-      price: 'Free while in early access',
-      desc: 'For individual engineers exploring verified answers across connected team tools.',
+      badge: 'Individual',
+      price: '$29',
+      period: '/ month',
+      desc: 'For solo founders, tech leads, and developers indexing their workspace knowledge.',
       features: [
-        'Slack, GitHub, Jira and Notion connectors',
-        'Verified source chips with every answer',
-        'Hinglish & English query support',
-        'Direct citation and conflict inspection'
+        '1 User Seat',
+        '2,500 verified queries / month',
+        'Connect Slack, GitHub, Jira & Notion',
+        'Hinglish & English query understanding',
+        'Claim-level citation receipts with deep links',
+        'Standard email support'
       ],
-      ctaText: 'Get early access',
+      ctaText: 'Start Solo Trial',
+      href: '/sign-up?plan=solo',
       isPrimary: false
     },
     {
       name: 'Teams',
-      badge: 'Pilot Program',
-      price: 'Talk to us',
-      desc: 'For engineering organizations needing tenant-isolated deployments and workspace governance.',
+      badge: 'Most Popular',
+      price: '$99',
+      period: '/ month',
+      desc: 'For growing engineering and product teams requiring org-wide knowledge governance.',
       features: [
-        'Everything in Solo',
-        'Tenant-isolated database and vector namespaces',
-        'Admin-configured audience rules for Jira & Notion',
-        'Query audit logs and priority onboarding'
+        '5 User Seats included (+$15/extra seat)',
+        '15,000 verified queries / month',
+        'Everything in Solo plan',
+        'Tenant-isolated database & Neo4j graph',
+        'Role-Based Access Control (RBAC) governance',
+        'Priority Slack & email support'
       ],
-      ctaText: 'Talk to us',
+      ctaText: 'Start Teams Trial',
+      href: '/sign-up?plan=teams',
       isPrimary: true
+    },
+    {
+      name: 'Enterprise',
+      badge: 'Custom',
+      price: 'Contact Us',
+      period: '',
+      desc: 'For organizations needing custom VPC isolation, custom SLAs, and enterprise compliance.',
+      features: [
+        'Unlimited seats & custom query limits',
+        'Dedicated GCP VPC & private deployment',
+        'Custom SSO (Okta, Azure AD, Google)',
+        'Enterprise SLA & 99.9% uptime guarantee',
+        'SOC2 audit assistance & custom DPA',
+        'Dedicated onboarding engineer'
+      ],
+      ctaText: 'Contact for Demo',
+      href: null,
+      isPrimary: false,
+      isContact: true
     }
   ];
 
   return (
     <section id="plans" style={{
-      padding: '64px 0',
+      padding: '72px 0',
       backgroundColor: 'var(--bg)'
     }}>
       <div className="landing-container">
-        <div style={{ textAlign: 'center', marginBottom: '44px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
           <div style={{
             fontSize: '0.8rem',
             fontWeight: 600,
@@ -49,7 +76,7 @@ export default function PricingSection({ onOpenEarlyAccess }) {
             letterSpacing: '0.04em',
             marginBottom: '8px'
           }}>
-            Plans
+            Transparent Pricing
           </div>
           <h2 className="font-serif-headline" style={{
             fontSize: 'clamp(1.8rem, 3.5vw, 2.5rem)',
@@ -57,15 +84,15 @@ export default function PricingSection({ onOpenEarlyAccess }) {
             margin: '0 0 10px 0',
             fontWeight: 400
           }}>
-            Simple access. No unproven tiers.
+            Built for modern engineering teams.
           </h2>
           <p style={{
             color: 'var(--mute)',
             fontSize: '1rem',
-            maxWidth: '520px',
+            maxWidth: '560px',
             margin: '0 auto'
           }}>
-            We are currently in private early access. Connect with us to run CognitRAG on your team&apos;s workspace.
+            Choose the plan that fits your company size. Every plan includes all 4 integrations and full citation receipts.
           </p>
         </div>
 
@@ -73,7 +100,7 @@ export default function PricingSection({ onOpenEarlyAccess }) {
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           gap: '24px',
-          maxWidth: '820px',
+          maxWidth: '1100px',
           margin: '0 auto'
         }}>
           {plans.map((plan) => (
@@ -109,12 +136,23 @@ export default function PricingSection({ onOpenEarlyAccess }) {
 
               <div>
                 <div style={{
-                  fontSize: '1.4rem',
-                  fontWeight: 600,
-                  color: 'var(--ink)',
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: '4px',
                   marginBottom: '6px'
                 }}>
-                  {plan.price}
+                  <span style={{
+                    fontSize: '2rem',
+                    fontWeight: 700,
+                    color: 'var(--ink)'
+                  }}>
+                    {plan.price}
+                  </span>
+                  {plan.period && (
+                    <span style={{ fontSize: '0.9rem', color: 'var(--mute)' }}>
+                      {plan.period}
+                    </span>
+                  )}
                 </div>
                 <p style={{ fontSize: '0.88rem', color: 'var(--mute)', margin: 0, lineHeight: 1.5 }}>
                   {plan.desc}
@@ -138,7 +176,13 @@ export default function PricingSection({ onOpenEarlyAccess }) {
               </div>
 
               <button
-                onClick={onOpenEarlyAccess}
+                onClick={() => {
+                  if (plan.href) {
+                    window.location.href = plan.href;
+                  } else {
+                    onOpenEarlyAccess();
+                  }
+                }}
                 style={{
                   backgroundColor: plan.isPrimary ? 'var(--ind)' : 'transparent',
                   color: plan.isPrimary ? '#FFFFFF' : 'var(--ink)',

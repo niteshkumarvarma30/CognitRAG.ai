@@ -42,31 +42,22 @@ def detect_chunk_source_type(content: str, filename: str = "") -> str:
 embedding_cache = LRUCache(max_size=1000)
 
 def get_embedding(text: str, language_tag: str = "en") -> list[float]:
-    """Language-aware embedding router.
-    - en → NVIDIA NV-EmbedQA (high quality English)
-    - hi-latn / mixed → Sarvam or multilingual-e5
+    """Google Cloud Vertex AI text-embedding-004 (768-dim) router.
+    Draws from Google for Startups $2,000 credit.
     """
     key = embedding_cache.generate_key(text + language_tag)
     cached = embedding_cache.get(key)
     if cached is not None:
-        print("[Cache Hit] Fetched embedding from local LRU cache in 0ms")
         return cached
 
-    from src.ingestion.language_detector import detect_language
-    detected_lang = language_tag if language_tag != "en" else detect_language(text)
-
     try:
-        import litellm
-        aws_region = os.environ.get("AWS_REGION") or os.environ.get("AWS_REGION_NAME", "us-west-2")
-        os.environ["AWS_REGION"] = aws_region
-        if not (os.environ.get("AWS_SECRET_ACCESS_KEY") and os.environ.get("AWS_ACCESS_KEY_ID")):
-            vec = [0.0] * 1024
-        else:
-            response = litellm.embedding(model="bedrock/amazon.titan-embed-text-v2:0", input=[text], timeout=5.0)
-            vec = response.data[0].embedding
+        from src.services.vertex_client import vertex_client
+        vec = vertex_client.get_embedding(text)
+        if not vec:
+            vec = [0.0] * 768
     except Exception as e:
-        print(f"[Embedding Error] Titan failed: {e}")
-        vec = [0.0] * 1024
+        print(f"[Embedding Error] Vertex AI embedding failed: {e}")
+        vec = [0.0] * 768
 
     embedding_cache.put(key, vec, ttl_seconds=3600)
     return vec

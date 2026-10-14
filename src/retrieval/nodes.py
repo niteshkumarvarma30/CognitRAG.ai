@@ -12,6 +12,8 @@ from langsmith import traceable
 import google.generativeai as genai
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
+from src.services.vertex_client import vertex_client
+from src.services.sarvam_client import sarvam_client
 
 
 from litellm import completion
@@ -131,31 +133,38 @@ def check_cache(state):
 
 @traceable(name="route_query")
 def route_query(state):
-    print("--- ROUTING QUERY VIA SARVAM-105B ---")
+    print("--- ROUTING QUERY VIA VERTEX AI (GEMINI 2.5 FLASH) ---")
     question = state["question"]
     try:
-        res = groq_instructor.chat.completions.create(
-            model="openai/gpt-oss-20b",
+        # If question contains Hinglish or Indian languages, translate/normalize with Sarvam
+        if sarvam_client.is_available():
+            normalized = sarvam_client.translate(question)
+            if normalized and normalized != question:
+                print(f"[Sarvam] Query normalized: '{question}' -> '{normalized}'")
+                question = normalized
+
+        system_instruction = (
+            "Classify the intent of the user query into exactly one category:\n"
+            "- 'greeting': pure greetings like 'hello', 'hi'.\n"
+            "- 'faq': general small talk, chit-chat, or completely out-of-scope non-corporate queries (e.g. weather forecast, creative writing, poetry, cooking recipes, sports, general world trivia).\n"
+            "- 'conversational': questions about the ongoing conversation history itself.\n"
+            "- 'personal': questions about the user's explicit preferences.\n"
+            "- 'followup': queries that directly refer back to previous conversation turns.\n"
+            "- 'agent_query': complex multi-step analysis comparing entities, calculating financial KPIs (revenue, churn, growth), or cross-domain rollups.\n"
+            "- 'technical_query': any question about corporate documentation, audits, compliance reports, Drive/Notion/Jira documents, system configurations, options, API endpoints, technical parameters, or codebase facts.\n\n"
+            "TARGET EXAMPLES:\n"
+            "- 'Who conducted the security audit in the Drive compliance summary?' -> technical_query\n"
+            "- 'What is the weather forecast in Tokyo for next Tuesday?' -> faq\n"
+            "- 'Can you write a poem about the sunrise over Mount Fuji?' -> faq\n"
+            "- 'Can you give me a recipe for authentic Neapolitan pizza dough?' -> faq\n"
+            "When in doubt between technical_query and agent_query, default to 'technical_query'. Also extract technical entities and determine if memory or graph search is needed."
+        )
+
+        res = vertex_client.generate_structured(
+            prompt=question,
             response_model=RouteDecision,
-            messages=[
-                {"role": "system", "content": (
-                    "Classify the intent of the user query into exactly one category:\n"
-                    "- 'greeting': pure greetings like 'hello', 'hi'.\n"
-                    "- 'faq': general small talk, chit-chat, or completely out-of-scope non-corporate queries (e.g. weather forecast, creative writing, poetry, cooking recipes, sports, general world trivia).\n"
-                    "- 'conversational': questions about the ongoing conversation history itself.\n"
-                    "- 'personal': questions about the user's explicit preferences.\n"
-                    "- 'followup': queries that directly refer back to previous conversation turns.\n"
-                    "- 'agent_query': complex multi-step analysis comparing entities, calculating financial KPIs (revenue, churn, growth), or cross-domain rollups.\n"
-                    "- 'technical_query': any question about corporate documentation, audits, compliance reports, Drive/Notion/Jira documents, system configurations, options, API endpoints, technical parameters, or codebase facts.\n\n"
-                    "TARGET EXAMPLES:\n"
-                    "- 'Who conducted the security audit in the Drive compliance summary?' -> technical_query\n"
-                    "- 'What is the weather forecast in Tokyo for next Tuesday?' -> faq\n"
-                    "- 'Can you write a poem about the sunrise over Mount Fuji?' -> faq\n"
-                    "- 'Can you give me a recipe for authentic Neapolitan pizza dough?' -> faq\n"
-                    "When in doubt between technical_query and agent_query, default to 'technical_query'. Also extract technical entities and determine if memory or graph search is needed."
-                )},
-                {"role": "user", "content": question}
-            ]
+            system_instruction=system_instruction,
+            temperature=0.0
         )
         route = res.intent
         need_memory = res.need_memory
@@ -169,7 +178,7 @@ def route_query(state):
         query_entities = []
         
     print(f"Decision: {route} | Need Mem: {need_memory} | Need Graph: {need_graph} | Entities: {query_entities}")
-    return {"route": route, "need_memory": need_memory, "need_graph": need_graph, "query_entities": query_entities}
+    return {"route": route, "need_memory": need_memory, "need_graph": need_graph, "query_entities": query_entities, "question": question}
 
 @traceable(name="retrieve_context")
 def retrieve(state):
@@ -316,25 +325,21 @@ def graph_decision(state):
     need_graph = False
     
     if len(candidate_entities) > 1 and high_confidence:
-        print("Signals passed! Calling openai/gpt-oss-120b to confirm graph traversal...")
-        # Call the exact same LLM (openai/gpt-oss-120b) to make the final determination
+        print("Signals passed! Calling Vertex AI to confirm graph traversal...")
         try:
             class GraphDecisionModel(BaseModel):
                 needs_traversal: bool = Field(description="True if traversing the graph for these entities will help answer the user query.")
             
-            decision = groq_instructor.chat.completions.create(
-                model="openai/gpt-oss-120b",
+            decision = vertex_client.generate_structured(
+                prompt=f"Query: {question}\nCandidate Entities: {candidate_entities}",
                 response_model=GraphDecisionModel,
-                messages=[
-                    {"role": "system", "content": "You are a precise routing agent. Determine if traversing a knowledge graph for the given entities is necessary to answer the query."},
-                    {"role": "user", "content": f"Query: {question}\\nCandidate Entities: {candidate_entities}"}
-                ],
+                system_instruction="You are a precise routing agent. Determine if traversing a knowledge graph for the given entities is necessary to answer the query.",
                 temperature=0.0
             )
             need_graph = decision.needs_traversal
-            print(f"openai/gpt-oss-120b concluded need_graph = {need_graph}")
+            print(f"Vertex AI concluded need_graph = {need_graph}")
         except Exception as e:
-            print(f"openai/gpt-oss-120b decision failed: {e}")
+            print(f"Vertex AI decision failed: {e}")
             need_graph = True # fallback
     else:
         print("Signals failed. Bypassing graph traversal.")
@@ -477,36 +482,16 @@ def generate(state, config):
             history_str += f"{role}: {msg['content']}\n"
         context_block += f"\n\nRecent Chat History:\n{history_str}"
     
-    import time
-    models_to_try = ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
-    response = None
-    for attempt in range(4):
-        for model_name in models_to_try:
-            try:
-                response = groq_client.chat.completions.create(
-                    model=model_name,
-                    temperature=0.0,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"{context_block}\n\nQuestion: {question}"}
-                    ]
-                )
-                break
-            except Exception as e:
-                err_str = str(e).lower()
-                if "429" in err_str or "connection" in err_str or "connect" in err_str or "timeout" in err_str or "getaddrinfo" in err_str:
-                    continue
-                else:
-                    raise e
-        if response is not None:
-            break
-        print(f"Rate limits hit across models on attempt {attempt+1}/4. Backing off for 4s...")
-        time.sleep(4)
-
-    if response is None:
-        raise RuntimeError("All generative models exhausted rate limits after retries.")
-    
-    raw_generation = response.choices[0].message.content or ""
+    try:
+        raw_generation = vertex_client.generate(
+            prompt=f"{context_block}\n\nQuestion: {question}",
+            system_instruction=system_prompt,
+            temperature=0.0,
+            max_output_tokens=2048
+        )
+    except Exception as e:
+        print(f"Vertex AI generation error: {e}")
+        raw_generation = "I don't know."
     clean_generation = re.sub(r"<think>.*?</think>", "", raw_generation, flags=re.DOTALL).strip()
     if not clean_generation and raw_generation:
         clean_generation = raw_generation.strip()
@@ -697,13 +682,11 @@ def save_memory(state):
     # 1. Fact & Preference Extraction
     interaction = f"User: {current_q}\nAssistant: {current_a}"
     try:
-        decision = groq_instructor.chat.completions.create(
-            model="openai/gpt-oss-120b",
+        decision = vertex_client.generate_structured(
+            prompt=interaction,
             response_model=MemoryExtraction,
-            messages=[
-                {"role": "system", "content": "Extract highly specific, discrete facts about the user's setup, and ALSO extract any explicit rules or preferences they want the assistant to follow (like 'always reply in Spanish' or 'use bullet points'). If there are no new facts or preferences, return empty lists/dicts."},
-                {"role": "user", "content": interaction}
-            ]
+            system_instruction="Extract highly specific, discrete facts about the user's setup, and ALSO extract any explicit rules or preferences they want the assistant to follow (like 'always reply in Spanish' or 'use bullet points'). If there are no new facts or preferences, return empty lists/dicts.",
+            temperature=0.0
         )
         
         # Save Facts
@@ -768,14 +751,12 @@ def save_memory(state):
         )
         prompt = f"Existing Context:\n{current_rolling}\n\nOld Messages to Incorporate:\n{history_str}\n\nOUTPUT ONLY THE SUMMARY OR 'EMPTY_MEMORY':"
         try:
-            response = groq_client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            new_summary = response.choices[0].message.content
+            new_summary = vertex_client.generate(
+                prompt=prompt,
+                system_instruction=system_prompt,
+                temperature=0.2,
+                max_output_tokens=500
+            ).strip()
         except Exception as e:
             print(f"Rolling summary failed: {e}")
             
@@ -799,23 +780,16 @@ def rewrite(state):
     question = state["question"]
     rewrite_count = state.get("rewrite_count", 0) + 1
     new_q = question
-    models_to_try = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
-    for m in models_to_try:
-        try:
-            decision = groq_instructor.chat.completions.create(
-                model=m,
-                response_model=RewrittenQuery,
-                messages=[
-                    {"role": "system", "content": "You are a search query rewriter. Your ONLY job is to output a new reformulated search query based on the user's input to make it better for a vector database search. DO NOT provide explanations, do NOT converse. Just output the new query."},
-                    {"role": "user", "content": question}
-                ]
-            )
-            new_q = decision.new_query
-            break
-        except Exception as e:
-            if "429" in str(e):
-                continue
-            print(f"Rewrite failed with model {m}, trying fallback...")
+    try:
+        decision = vertex_client.generate_structured(
+            prompt=question,
+            response_model=RewrittenQuery,
+            system_instruction="You are a search query rewriter. Your ONLY job is to output a new reformulated search query based on the user's input to make it better for a vector database search. DO NOT provide explanations, do NOT converse. Just output the new query.",
+            temperature=0.0
+        )
+        new_q = decision.new_query
+    except Exception as e:
+        print(f"Rewrite failed: {e}")
         
     print(f"New query: {new_q} (Rewrite #{rewrite_count})")
     return {"question": new_q, "rewrite_count": rewrite_count}
@@ -829,7 +803,7 @@ def generate_cached(state):
     question = state.get("question", "").strip()
     route = state.get("route", "greeting")
 
-    # 1. Try to generate a warm, concise conversational response via Groq
+    # 1. Try to generate a warm, concise conversational response via Vertex AI
     try:
         system_prompt = (
             "You are CognitRAG, an intelligent Company Brain assistant for enterprises. "
@@ -837,20 +811,16 @@ def generate_cached(state):
             "Respond warmly, naturally, and concisely (1 to 2 sentences) to the user's greeting or question. "
             "Ask how you can help them navigate their company's documents, engineering tasks, or decisions today."
         )
-        response = groq_client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+        greeting_text = vertex_client.generate(
+            prompt=question or "Hello",
+            system_instruction=system_prompt,
             temperature=0.7,
-            max_tokens=120,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": question or "Hello"}
-            ]
-        )
-        greeting_text = response.choices[0].message.content.strip()
+            max_output_tokens=150
+        ).strip()
         if greeting_text:
             return {"generation": greeting_text}
     except Exception as e:
-        print(f"Greeting generation via LLM failed ({e}), using reliable fallback.")
+        print(f"Greeting generation via Vertex AI failed ({e}), using reliable fallback.")
 
     # 2. Reliable fallback if LLM is unavailable or rate limited
     q_lower = question.lower()
@@ -887,13 +857,11 @@ def contextualize_query(state):
             "CRITICAL: Do NOT add generic phrases like 'in software development'. Maintain strict focus on the actual entities (like PostgreSQL) mentioned."
         )
             
-        decision = groq_instructor.chat.completions.create(
-            model="openai/gpt-oss-120b",
+        decision = vertex_client.generate_structured(
+            prompt=f"Chat History:\n{history_str}\n\nLatest Query: {question}",
             response_model=RewrittenQuery,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Chat History:\n{history_str}\n\nLatest Query: {question}"}
-            ]
+            system_instruction=system_prompt,
+            temperature=0.0
         )
         new_q = decision.new_query
         print(f"Contextualized Query: {new_q}")
@@ -1099,10 +1067,10 @@ def supervisor_node(state):
     system_prompt += "\nDecide which agent should act next, or 'FINISH' if the question can be fully answered with the current worker responses."
     
     try:
-        decision = groq_instructor.chat.completions.create(
-            model="openai/gpt-oss-120b",
+        decision = vertex_client.generate_structured(
+            prompt=system_prompt,
             response_model=SupervisorDecision,
-            messages=[{"role": "user", "content": system_prompt}]
+            temperature=0.0
         )
         next_agent = decision.next_agent
         print(f"Supervisor decided: {next_agent} (Reason: {decision.reasoning})")
@@ -1113,10 +1081,8 @@ def supervisor_node(state):
     return {"next_agent": next_agent, "agent_steps": agent_steps + 1}
 
 @traceable(name="vector_agent_node")
-@with_exponential_backoff(max_retries=4, base_delay=2.0)
 def vector_agent_node(state):
     print("--- VECTOR AGENT ---")
-    groq_rate_limiter.consume(3000) # Estimate tokens
     
     question = state["question"]
     tenant_id = state["tenant_id"]
@@ -1125,17 +1091,14 @@ def vector_agent_node(state):
     # The Vector Agent uses hybrid_retriever internally
     try:
         from src.retrieval.hybrid import hybrid_retriever
-        chunks = hybrid_retriever(tenant_id, question, top_k=3, user_id=user_id)
-        docs_text = "\n\n".join([f"Source: {c['filename']}\n{c['content']}" for c in chunks])
+        chunks, _ = hybrid_retriever(tenant_id, user_id, question, top_k=3)
+        docs_text = "\n\n".join([f"Source: {c.get('filename', 'doc')}\n{c.get('content', '')}" for c in chunks])
         
-        response = groq_client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[
-                {"role": "system", "content": "You are a Vector Retriever agent. Extract concise, direct answers and facts from the provided text."},
-                {"role": "user", "content": f"Context:\n{docs_text}\n\nQuestion: {question}"}
-            ]
+        ans = vertex_client.generate(
+            prompt=f"Context:\n{docs_text}\n\nQuestion: {question}",
+            system_instruction="You are a Vector Retriever agent. Extract concise, direct answers and facts from the provided text.",
+            temperature=0.0
         )
-        ans = response.choices[0].message.content
     except Exception as e:
         ans = f"Vector agent encountered an error: {e}"
         
@@ -1144,10 +1107,8 @@ def vector_agent_node(state):
     return {"worker_responses": worker_responses}
 
 @traceable(name="graph_agent_node")
-@with_exponential_backoff(max_retries=4, base_delay=2.0)
 def graph_agent_node(state):
     print("--- GRAPH AGENT ---")
-    groq_rate_limiter.consume(2000) # Estimate tokens
     
     question = state["question"]
     tenant_id = state["tenant_id"]
@@ -1155,18 +1116,14 @@ def graph_agent_node(state):
     # Graph agent looks up entities and relations in Neo4j
     try:
         from src.retrieval.graph_retriever import expand_graph_context
-        # Use simple entities from state if present
         entities = state.get("candidate_entities") or state.get("query_entities") or [question.split()[0]]
         graph_text = expand_graph_context(entities, tenant_id=tenant_id)
         
-        response = groq_client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[
-                {"role": "system", "content": "You are a Knowledge Graph agent. Explain relationships and structural facts from this graph context."},
-                {"role": "user", "content": f"Graph Data:\n{graph_text}\n\nQuestion: {question}"}
-            ]
+        ans = vertex_client.generate(
+            prompt=f"Graph Data:\n{graph_text}\n\nQuestion: {question}",
+            system_instruction="You are a Knowledge Graph agent. Explain relationships and structural facts from this graph context.",
+            temperature=0.0
         )
-        ans = response.choices[0].message.content
     except Exception as e:
         ans = f"Graph agent error: {e}"
         
@@ -1175,7 +1132,6 @@ def graph_agent_node(state):
     return {"worker_responses": worker_responses}
 
 @traceable(name="sql_agent_node")
-@with_exponential_backoff(max_retries=4, base_delay=2.0)
 def sql_agent_node(state):
     print("--- SQL AGENT ---")
     question = state["question"]
@@ -1185,10 +1141,7 @@ def sql_agent_node(state):
     worker_responses["sql_agent"] = ans
     return {"worker_responses": worker_responses}
 
-from src.utils.rate_limiter import groq_rate_limiter, with_exponential_backoff
-
 @traceable(name="synthesizer_node")
-@with_exponential_backoff(max_retries=4, base_delay=2.0)
 def synthesizer_node(state):
     print("--- SYNTHESIZER NODE ---")
     question = state["question"]
@@ -1199,14 +1152,11 @@ def synthesizer_node(state):
         context += f"### {worker} said:\n{resp}\n\n"
         
     try:
-        response = groq_client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[
-                {"role": "system", "content": "You are the Final Synthesizer. Combine the agent responses to perfectly answer the user's question. Think deeply and step-by-step."},
-                {"role": "user", "content": f"Agent Context:\n{context}\n\nQuestion: {question}"}
-            ]
+        ans = vertex_client.generate(
+            prompt=f"Agent Context:\n{context}\n\nQuestion: {question}",
+            system_instruction="You are the Final Synthesizer. Combine the agent responses to perfectly answer the user's question. Think deeply and step-by-step.",
+            temperature=0.0
         )
-        ans = response.choices[0].message.content
     except Exception as e:
         ans = f"Synthesizer Error: {e}"
         

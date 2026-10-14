@@ -21,13 +21,8 @@ from src.ingestion.cross_linker import link_cross_system_entities
 from src.ingestion.language_detector import detect_language, tag_chunk_language
 from src.ingestion.normalizer import NormalizedDoc
 
-import litellm
-import instructor
-
-# Bedrock Llama 3-70B for coreference resolution (English path)
-bedrock_model = "bedrock/meta.llama3-70b-instruct-v1:0"
-bedrock_instructor = instructor.from_litellm(litellm.completion, mode=instructor.Mode.JSON)
-litellm.drop_params = True
+from src.services.vertex_client import vertex_client
+from src.services.sarvam_client import sarvam_client
 
 
 # ============================================================
@@ -49,105 +44,93 @@ class GraphExtraction(BaseModel):
 
 
 # ============================================================
-# EMBEDDING ROUTER  — core of the Hinglish layer
+# EMBEDDING ROUTER  — Google Vertex AI + Sarvam Hinglish
 # ============================================================
 def get_embedding_for_language(text: str, language_tag: str) -> list[float]:
     """
-    Route embedding to the correct model based on language_tag.
-    Titan v2 provides 1024-dim multilingual embeddings across English, Hindi, and Hinglish.
+    Route embedding to Google Cloud Vertex AI text-embedding-004 (768 dimensions).
+    Indian language / Hinglish chunks are translated to English via Sarvam mayura:v1
+    for high semantic accuracy while preserving original content.
     """
     try:
-        resp = litellm.embedding(model="bedrock/amazon.titan-embed-text-v2:0", input=[text])
-        return resp.data[0].embedding
+        norm_text = text
+        if sarvam_client.is_available() and language_tag in ("hi-latn", "mixed", "hi"):
+            translated = sarvam_client.translate(text)
+            if translated and translated != text:
+                norm_text = translated
+        return vertex_client.get_embedding(norm_text)
     except Exception as e:
-        print(f"Embedding failed: {e}")
-        return [0.0] * 1024
+        print(f"Vertex embedding failed: {e}")
+        return [0.0] * 768
 
 
 def get_embeddings_batch(texts: list[str], language_tag: str) -> list[list[float]]:
-    """Batch embedding with Titan v2 multilingual."""
-    all_embeddings = []
-    for i in range(0, len(texts), 25):
-        batch = texts[i:i+25]
-        try:
-            resp = litellm.embedding(model="bedrock/amazon.titan-embed-text-v2:0", input=batch)
-            all_embeddings.extend([d.embedding for d in resp.data])
-        except Exception as e:
-            print(f"Batch embedding failed: {e}")
-            all_embeddings.extend([[0.0] * 1024 for _ in batch])
-    return all_embeddings
+    """Batch 768-dim embeddings with Vertex AI text-embedding-004."""
+    if not texts:
+        return []
+    try:
+        normalized_texts = []
+        for t in texts:
+            norm_t = t
+            if sarvam_client.is_available() and language_tag in ("hi-latn", "mixed", "hi"):
+                trans = sarvam_client.translate(t)
+                if trans and trans != t:
+                    norm_t = trans
+            normalized_texts.append(norm_t)
+        return vertex_client.get_embeddings(normalized_texts)
+    except Exception as e:
+        print(f"Vertex batch embedding failed: {e}")
+        return [[0.0] * 768 for _ in texts]
 
 
 # ============================================================
-# COREFERENCE RESOLUTION (English only for now)
+# COREFERENCE RESOLUTION (Vertex AI gemini-2.5-flash)
 # ============================================================
 def resolve_coreferences(chunk: str, language_tag: str = "en") -> str:
     """
-    Resolve pronouns before graph extraction.
-    English: uses Bedrock Llama 3-70B.
-    Hinglish: skipped pending quality validation (returns original).
+    Resolve pronouns before graph extraction using Vertex AI gemini-2.5-flash.
     """
     if language_tag in ("hi-latn", "mixed"):
-        # TODO: Validate multilingual coreference quality before enabling
-        print("    -> Skipping coreference for Hinglish (not yet validated)")
-        return chunk
+        print("    -> Normalizing Hinglish phrasing before graph extraction...")
+        if sarvam_client.is_available():
+            chunk = sarvam_client.translate(chunk)
 
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            response = litellm.completion(
-                model=bedrock_model,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        "Rewrite the following text by replacing all pronouns "
-                        "(it, they, this, these, etc.) with the exact proper nouns "
-                        "they refer to. Do not summarize or change meaning. "
-                        "Return ONLY the rewritten text.\n\nText:\n" + chunk
-                    )
-                }],
-                temperature=0.0
-            )
-            time.sleep(2)
-            return response.choices[0].message.content
-        except Exception as e:
-            print(f"Coreference resolution failed (attempt {attempt+1}): {e}")
-            time.sleep(10)
-    return chunk
+    try:
+        rewritten = vertex_client.generate(
+            prompt="Rewrite the following text by replacing all pronouns (it, they, this, these, etc.) with the exact proper nouns they refer to. Do not summarize or change meaning. Return ONLY the rewritten text.\n\nText:\n" + chunk,
+            temperature=0.0,
+            max_output_tokens=1024
+        )
+        return rewritten.strip() if rewritten else chunk
+    except Exception as e:
+        print(f"Coreference resolution failed: {e}")
+        return chunk
 
 
 # ============================================================
-# GRAPH EXTRACTION with confidence scoring
+# GRAPH EXTRACTION with confidence scoring (Vertex AI)
 # ============================================================
 def extract_graph_from_chunk(chunk: str, language_tag: str = "en") -> Optional[GraphExtraction]:
     """
-    Extract entities and relationships from text.
-    Each relationship includes a confidence score.
-    Derivation is always 'extracted' (LLM-inferred) here.
+    Extract entities and relationships from text using gemini-2.5-flash.
+    Each relationship includes a confidence score 0.0-1.0.
     """
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            result = bedrock_instructor.chat.completions.create(
-                model=bedrock_model,
-                response_model=GraphExtraction,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        "Extract entities and relationships from this text. "
-                        "For each relationship, provide a confidence score 0.0-1.0 "
-                        "based on how clearly the relationship is stated.\n\n"
-                        "Text:\n" + chunk
-                    )
-                }],
-                temperature=0.1
-            )
-            time.sleep(2)
-            return result
-        except Exception as e:
-            print(f"Graph extraction failed (attempt {attempt+1}): {e}")
-            time.sleep(10)
-    return None
+    try:
+        system_instruction = (
+            "Extract discrete entities and relationships from this text. "
+            "For each relationship, provide a confidence score between 0.0 and 1.0 "
+            "based on how explicitly the relationship is stated. Output valid JSON matching the schema."
+        )
+        result = vertex_client.generate_structured(
+            prompt="Text to analyze:\n" + chunk,
+            response_model=GraphExtraction,
+            system_instruction=system_instruction,
+            temperature=0.0
+        )
+        return result
+    except Exception as e:
+        print(f"Vertex graph extraction failed: {e}")
+        return None
 
 
 # ============================================================
@@ -297,7 +280,7 @@ def process_parent_chunk(parent_text: str, tenant_id: str, document_id: str,
             "source_type": source_type,
             "raw_ref_url": raw_ref_url,
             "author": author,
-            "embedding": all_embeddings[i],
+            "embedding_768": all_embeddings[i],
             "entities": entity_names,
             "relationship_types": list(set(relationship_types)),
             "allowed_entities": allowed_entities
@@ -308,7 +291,7 @@ def process_parent_chunk(parent_text: str, tenant_id: str, document_id: str,
     if cross_link_result.get("links_created", 0) > 0:
         print(f"    -> Cross-linked {cross_link_result['links_created']} entities")
 
-    valid_cols = {'id', 'document_id', 'tenant_id', 'parent_id', 'content', 'embedding', 'entities', 'graph_score', 'relationship_types'}
+    valid_cols = {'id', 'document_id', 'tenant_id', 'parent_id', 'content', 'embedding_768', 'entities', 'graph_score', 'relationship_types', 'allowed_entities', 'source_type', 'raw_ref_url', 'author'}
     safe_records = []
     for r in records:
         safe_r = {k: v for k, v in r.items() if k in valid_cols}

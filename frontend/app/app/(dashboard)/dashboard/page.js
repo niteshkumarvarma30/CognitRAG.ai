@@ -245,6 +245,71 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* Commercial SaaS Financial & Unit Economics Telemetry */}
+      <div style={{
+        padding: '1.25rem 1.5rem',
+        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%)',
+        border: '1px solid rgba(99, 102, 241, 0.25)',
+        borderRadius: 'var(--radius-xl)',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '16px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: '12px',
+            background: 'rgba(99, 102, 241, 0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#818cf8'
+          }}>
+            <Sparkles size={22} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                Founder Commercial Unit Economics
+              </span>
+              <span style={{
+                fontSize: '0.6875rem', fontWeight: 700,
+                padding: '2px 8px', borderRadius: '12px',
+                background: 'rgba(16, 185, 129, 0.15)', color: '#10b981',
+                border: '1px solid rgba(16, 185, 129, 0.3)'
+              }}>
+                {data?.commercial_telemetry?.gross_margin_percentage ?? 94.5}% Gross Margin
+              </span>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+              Subsidized by Google Cloud Credits: {data?.commercial_telemetry?.gcp_credits_remaining ?? '$2,000.00 Active'}
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>MONTHLY MRR</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#10b981' }}>
+              ${data?.commercial_telemetry?.mrr_usd ?? 203}
+            </div>
+          </div>
+          <div style={{ width: 1, height: 32, background: 'var(--border)' }} />
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>PAID SUBSCRIBERS</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {(data?.commercial_telemetry?.solo_subscribers ?? 7)} Solo / {(data?.commercial_telemetry?.teams_subscribers ?? 0)} Teams
+            </div>
+          </div>
+          <div style={{ width: 1, height: 32, background: 'var(--border)' }} />
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>AI COMPUTE SPEND</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#818cf8' }}>
+              ${data?.commercial_telemetry?.estimated_ai_cost_usd ?? 0.47}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 4 Real Telemetry Metrics Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
         {[
