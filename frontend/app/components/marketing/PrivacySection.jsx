@@ -61,12 +61,7 @@ export default function PrivacySection() {
           </p>
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: '20px',
-          marginBottom: '32px'
-        }}>
+        <div className="privacy-4col-grid">
           {privacyPillars.map((p) => (
             <div
               key={p.title}
@@ -74,15 +69,15 @@ export default function PrivacySection() {
                 backgroundColor: 'var(--bg2)',
                 border: '1px solid var(--line)',
                 borderRadius: '10px',
-                padding: '24px',
+                padding: '20px 16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px'
+                gap: '10px'
               }}
             >
               <div style={{
-                width: '38px',
-                height: '38px',
+                width: '36px',
+                height: '36px',
                 borderRadius: '8px',
                 backgroundColor: 'var(--bg)',
                 border: '1px solid var(--line)',
@@ -94,7 +89,7 @@ export default function PrivacySection() {
               </div>
 
               <h3 style={{
-                fontSize: '1.05rem',
+                fontSize: '1rem',
                 fontWeight: 600,
                 color: 'var(--ink)',
                 margin: 0
@@ -103,7 +98,7 @@ export default function PrivacySection() {
               </h3>
 
               <p style={{
-                fontSize: '0.88rem',
+                fontSize: '0.85rem',
                 lineHeight: 1.5,
                 color: 'var(--mute)',
                 margin: 0
@@ -132,6 +127,25 @@ export default function PrivacySection() {
           </span>
         </div>
       </div>
+
+      <style jsx>{`
+        .privacy-4col-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+          margin-bottom: 32px;
+        }
+        @media (max-width: 960px) {
+          .privacy-4col-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        @media (max-width: 540px) {
+          .privacy-4col-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </section>
   );
 }

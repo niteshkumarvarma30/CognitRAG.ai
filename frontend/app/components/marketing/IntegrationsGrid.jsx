@@ -71,11 +71,7 @@ export default function IntegrationsGrid() {
           </p>
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: '20px'
-        }}>
+        <div className="tools-4col-grid">
           {tools.map((tool) => (
             <div
               key={tool.name}
@@ -83,17 +79,17 @@ export default function IntegrationsGrid() {
                 backgroundColor: 'var(--bg)',
                 border: '1px solid var(--line)',
                 borderRadius: '10px',
-                padding: '24px',
+                padding: '20px 16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px',
+                gap: '10px',
                 transition: 'border-color 0.15s ease'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{
-                  width: '42px',
-                  height: '42px',
+                  width: '38px',
+                  height: '38px',
                   borderRadius: '8px',
                   backgroundColor: 'var(--bg2)',
                   border: '1px solid var(--line)',
@@ -104,7 +100,7 @@ export default function IntegrationsGrid() {
                   {tool.icon}
                 </div>
                 <span style={{
-                  fontSize: '0.75rem',
+                  fontSize: '0.72rem',
                   fontWeight: 600,
                   color: 'var(--mute)',
                   textTransform: 'uppercase',
@@ -115,7 +111,7 @@ export default function IntegrationsGrid() {
               </div>
 
               <h3 style={{
-                fontSize: '1.2rem',
+                fontSize: '1.15rem',
                 fontWeight: 600,
                 color: 'var(--ink)',
                 margin: 0
@@ -124,7 +120,7 @@ export default function IntegrationsGrid() {
               </h3>
 
               <p style={{
-                fontSize: '0.9rem',
+                fontSize: '0.86rem',
                 lineHeight: 1.5,
                 color: 'var(--mute)',
                 margin: 0,
@@ -135,20 +131,38 @@ export default function IntegrationsGrid() {
 
               <div style={{
                 borderTop: '1px solid var(--line)',
-                paddingTop: '12px',
+                paddingTop: '10px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '0.78rem',
+                fontSize: '0.75rem',
                 color: 'var(--mute)'
               }}>
-                <Lock size={13} style={{ flexShrink: 0, color: 'var(--ind)' }} />
+                <Lock size={12} style={{ flexShrink: 0, color: 'var(--ind)' }} />
                 <span>{tool.access}</span>
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      <style jsx>{`
+        .tools-4col-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+        }
+        @media (max-width: 960px) {
+          .tools-4col-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        @media (max-width: 540px) {
+          .tools-4col-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </section>
   );
 }
