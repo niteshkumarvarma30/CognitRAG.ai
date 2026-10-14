@@ -1,0 +1,25 @@
+Total misclassified: 8
+[comi_6] Q: भारतीय रेलवे (Indian Railways) अपने डेडीकेटेड फ्रेट कॉरीडोर्स (DFC) के लिए एक नए असेट मॉनेटाइजेशन मॉडल पर काम कर रही है।
+  Gold: en | Gen: None | Correct: False
+
+[comi_8] Q: नेशनल टेस्टिंग एजेंसी (NTA) ने दिल्ली विश्वविद्यालय प्रवेश परीक्षा (DUET 2021) के लिए अपनी आधिकारिक वेबसाइट nta.ac.in पर प्रोविजनल आंसर की जारी की है।
+  Gold: en | Gen: None | Correct: False
+
+[comi_15] Q: Honey Trap case in Shajapur : मध्य प्रदेश के शाजापुर के एक पेट्रोल पंप व्यवसायी से मोबाइल पर पहले युवती ने दोस्ती की।
+  Gold: en | Gen: None | Correct: False
+
+[comi_19] Q: कैंब्रियन-पूर्व समुद्रों के तलछटों में फ़ोरैमिनीफ़ेरा का विद्यमान रहना पाया जाता है, किंतु कोयला युग (coal age), या पेंसिलवेनिअन युग (Pennsylvanian) के पूर्व इनका कोई महत्व नहीं था।
+  Gold: en | Gen: None | Correct: False
+
+[comi_21] Q: अन्नपूर्णा इलाके के जय जगह कॉलोनी में प्रेमा (70) पति ईश्वर झमटानी (Prema Jhamtani) की हत्या का खुलासा हो गया।
+  Gold: en | Gen: None | Correct: False
+
+[comi_22] Q: कुछ estimates के अनुसार, भारत को भी 2070 तक Net Zero Target हासिल करने के लिए कम से कम USD 10 trillion की जरूरत होगी।
+  Gold: en | Gen: None | Correct: False
+
+[comi_37] Q: दिल्ली में 176 लोगों के खिलाफ एफआईआर दर्ज हुई क्योंकि उन्होंने घर से बाहर कदम रखा.इंदौर, नईदुनिया प्रतिनिधि, Indore Wrestling News।
+  Gold: en | Gen: None | Correct: False
+
+[comi_49] Q: उन्होंने बताया कि भारतीय जनता पार्टी के सांसद Shankar Lalwani और जिला प्रशासन की मदद से न केवल उन्हें बल्कि उनकी पत्नी Lata Kumari Talreja व Narayandas Lajomal Talreja को भी नागरिकता का प्रमाणपत्र मिल गया है।
+  Gold: en | Gen: None | Correct: False
+
