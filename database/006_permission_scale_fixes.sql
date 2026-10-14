@@ -420,7 +420,7 @@ CREATE FUNCTION match_semantic_cache(
     query_embedding   VECTOR(1024),
     match_count       INT,
     match_threshold   FLOAT,
-    p_tenant_id       UUID,
+    p_tenant_id       TEXT,
     p_permission_hash TEXT,
     p_entity_guard    TEXT[] DEFAULT ARRAY[]::TEXT[]
 )
@@ -431,7 +431,7 @@ AS $$
   SELECT sc.id, sc.query, sc.response,
          (1 - (sc.query_embedding <=> match_semantic_cache.query_embedding))::FLOAT AS similarity
   FROM semantic_cache sc
-  WHERE sc.tenant_id = p_tenant_id
+  WHERE sc.tenant_id::TEXT = p_tenant_id::TEXT
     AND sc.permission_hash = p_permission_hash
     AND sc.entity_guard = p_entity_guard
     AND (sc.expires_at IS NULL OR sc.expires_at > now())
