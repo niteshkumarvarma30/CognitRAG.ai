@@ -16,6 +16,15 @@ export default function AppShell({ children }) {
   const { user, isLoaded } = useUser();
   const { isSignedIn } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState('solo');
+
+  // Sync plan from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const p = localStorage.getItem('cognitrag_plan');
+      if (p) setCurrentPlan(p);
+    }
+  }, []);
 
   // Close mobile sidebar on route navigation
   useEffect(() => {
@@ -35,113 +44,40 @@ export default function AppShell({ children }) {
   ].filter(Boolean).map(e => e.toLowerCase().trim());
   const SUPERADMIN_EMAIL = 'niteshkumarvarma5722@gmail.com';
   const isSuperAdmin = allEmails.includes(SUPERADMIN_EMAIL.toLowerCase().trim());
-  const isAdminView = isSuperAdmin && (pathname === '/dashboard' || pathname === '/metrics' || pathname === '/settings');
-
-  const isEnterpriseView = pathname.startsWith('/enterprise-brain');
-  const isBharatView = pathname.startsWith('/bharat-intelligence');
-
-  // Strict zero-crossover navigation: each persona has ONLY its own tools
-  let navGroups = [];
-  let currentPersonaInfo = {
-    name: 'Developer Code Studio',
-    tag: 'Active Environment',
-    icon: Code2,
-    color: '#6366f1',
-    bg: 'rgba(99, 102, 241, 0.12)',
-    badgeColor: '#6366f1'
+  const currentPersonaInfo = {
+    name: 'CognitRAG',
+    tag: 'Company Brain AI',
+    icon: Brain,
+    color: '#818cf8',
+    bg: 'rgba(129, 140, 248, 0.15)',
+    badgeColor: '#818cf8'
   };
 
-  if (isAdminView) {
-    currentPersonaInfo = {
-      name: 'SuperAdmin Console',
-      tag: 'Platform Governance',
-      icon: Shield,
-      color: '#8b5cf6',
-      bg: 'rgba(139, 92, 246, 0.12)',
-      badgeColor: '#8b5cf6'
-    };
-    navGroups = [
-      {
-        title: 'Admin Governance',
-        links: [
-          { name: 'Admin Command Center', href: '/dashboard', icon: LayoutDashboard },
-          { name: 'Persona Analytics', href: '/metrics', icon: Activity },
-          { name: 'Platform Settings', href: '/settings', icon: Settings },
-        ]
-      }
-    ];
-  } else if (isEnterpriseView) {
-    currentPersonaInfo = {
-      name: 'Enterprise Brain',
-      tag: 'Private Pilot',
-      icon: Building2,
-      color: '#0284c7',
-      bg: 'rgba(2, 132, 199, 0.12)',
-      badgeColor: '#0284c7'
-    };
-    navGroups = [
-      {
-        title: 'Enterprise Brain',
-        links: [
-          { name: 'Pilot Overview & Contact', href: '/enterprise-brain', icon: Building2 },
-        ]
-      },
-      {
-        title: 'Workspace',
-        links: [
-          { name: 'Settings', href: '/enterprise-brain/settings', icon: Settings },
-        ]
-      }
-    ];
-  } else if (isBharatView) {
-    currentPersonaInfo = {
-      name: 'Bharat Intelligence',
-      tag: 'Sarvam AI Pilot',
-      icon: FileText,
-      color: '#d97706',
-      bg: 'rgba(217, 119, 6, 0.12)',
-      badgeColor: '#d97706'
-    };
-    navGroups = [
-      {
-        title: 'Bharat Intelligence',
-        links: [
-          { name: 'Pilot Program & Contact', href: '/bharat-intelligence', icon: FileText },
-        ]
-      },
-      {
-        title: 'Workspace',
-        links: [
-          { name: 'Settings', href: '/bharat-intelligence/settings', icon: Settings },
-        ]
-      }
-    ];
-  } else {
-    // Standard Developer Code Studio
-    currentPersonaInfo = {
-      name: 'Developer Code Studio',
-      tag: 'Isolated Container',
-      icon: Code2,
-      color: '#6366f1',
-      bg: 'rgba(99, 102, 241, 0.12)',
-      badgeColor: '#6366f1'
-    };
-    navGroups = [
-      {
-        title: 'Developer Studio',
-        links: [
-          { name: 'Code Studio', href: '/dev-studio', icon: Code2 },
-          { name: 'AST Call Graph', href: '/knowledge/graph', icon: Network },
-          { name: 'Repository Files', href: '/knowledge', icon: Database },
-        ]
-      },
-      {
-        title: 'Workspace',
-        links: [
-          { name: 'Settings', href: '/dev-studio/settings', icon: Settings },
-        ]
-      }
-    ];
+  const navGroups = [
+    {
+      title: 'Company Brain',
+      links: [
+        { name: 'Ask Brain', href: '/ask', icon: MessageSquare },
+        { name: 'Workspace Integrations', href: '/integrations', icon: Plug },
+        { name: 'Knowledge Vault', href: '/knowledge', icon: Database },
+        { name: 'Knowledge Graph', href: '/knowledge/graph', icon: Network },
+        { name: 'Citation Audit', href: '/metrics', icon: Activity },
+      ]
+    },
+    {
+      title: 'Subscription & Org',
+      links: [
+        { name: 'Plan & Settings', href: '/settings', icon: Settings },
+      ]
+    }
+  ];
+
+  if (isSuperAdmin) {
+    navGroups[1].links.unshift({
+      name: 'Founder Command Center',
+      href: '/dashboard',
+      icon: LayoutDashboard
+    });
   }
 
   if (!isLoaded) {
@@ -296,13 +232,13 @@ export default function AppShell({ children }) {
                   fontWeight: 700, 
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase', 
-                  background: isSuperAdmin ? 'rgba(99, 102, 241, 0.15)' : isEnterpriseView ? 'rgba(2, 132, 199, 0.15)' : isBharatView ? 'rgba(217, 119, 6, 0.15)' : '#eef2ff', 
-                  color: isSuperAdmin ? '#818cf8' : isEnterpriseView ? '#0284c7' : isBharatView ? '#d97706' : '#4f46e5', 
-                  padding: '1px 6px', 
+                  background: isSuperAdmin ? 'rgba(99, 102, 241, 0.15)' : currentPlan === 'teams' ? 'rgba(129, 140, 248, 0.15)' : 'rgba(16, 185, 129, 0.15)', 
+                  color: isSuperAdmin ? '#818cf8' : currentPlan === 'teams' ? '#a5b4fc' : '#10b981', 
+                  padding: '2px 8px', 
                   borderRadius: '4px', 
-                  border: '1px solid ' + (isSuperAdmin ? 'rgba(99, 102, 241, 0.3)' : isEnterpriseView ? 'rgba(2, 132, 199, 0.3)' : isBharatView ? 'rgba(217, 119, 6, 0.3)' : '#c7d2fe')
+                  border: '1px solid ' + (isSuperAdmin ? 'rgba(99, 102, 241, 0.3)' : currentPlan === 'teams' ? 'rgba(129, 140, 248, 0.3)' : 'rgba(16, 185, 129, 0.3)')
                 }}>
-                  {isSuperAdmin ? 'SuperAdmin' : isEnterpriseView ? 'Enterprise Pilot' : isBharatView ? 'Bharat Pilot' : 'Developer'}
+                  {isSuperAdmin ? 'Founder' : currentPlan === 'teams' ? 'Teams Plan' : 'Solo Plan'}
                 </span>
                 <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {user?.primaryEmailAddress?.emailAddress}
@@ -357,10 +293,13 @@ export default function AppShell({ children }) {
               <span style={{ color: currentPersonaInfo.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{currentPersonaInfo.name}</span>
               <span style={{ color: 'var(--text-muted)' }}>/</span>
               <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {pathname === '/dashboard' ? 'Command Center' : 
-                 pathname === '/enterprise-brain' ? 'Pilot Overview' :
-                 pathname === '/bharat-intelligence' ? 'Pilot Program' :
-                 pathname === '/dev-studio' ? 'Code Studio' :
+                {pathname === '/dashboard' ? 'Founder Command Center' : 
+                 pathname === '/ask' ? 'Ask Brain' :
+                 pathname === '/integrations' ? 'Workspace Integrations' :
+                 pathname === '/knowledge' ? 'Knowledge Vault' :
+                 pathname === '/knowledge/graph' ? 'Knowledge Graph' :
+                 pathname === '/metrics' ? 'Citation Audit' :
+                 pathname === '/settings' ? 'Plan & Settings' :
                  pathname.split('/').pop().charAt(0).toUpperCase() + pathname.split('/').pop().slice(1)}
               </span>
             </div>

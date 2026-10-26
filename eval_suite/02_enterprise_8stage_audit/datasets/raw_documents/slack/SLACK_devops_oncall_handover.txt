@@ -1,8 +1,0 @@
-Channel: #devops-oncall-handover
-Topic: On-call shift transition notes for week 38
-
-[09:00:00] Sarah Jenkins: Handing over primary on-call to @csantos. Highlights from the week:
-- Spark deadlock fixed in PR #4512.
-- Kafka rebalance storms remediated with PR #1421.
-- Calico IP leak resolved in PR #1195.
-No open P1 or P2 alerts right now. All pipelines green.

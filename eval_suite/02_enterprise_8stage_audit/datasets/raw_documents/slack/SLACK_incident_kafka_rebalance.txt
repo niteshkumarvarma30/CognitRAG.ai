@@ -1,9 +1,0 @@
-Channel: #incident-2024-05-18-kafka-rebalance
-Topic: Consumer group rebalance storm during Kafka broker 3 rolling restart
-
-[14:02:11] Sarah Jenkins: We just restarted `kafka-broker-03` for the security kernel patch and consumer lag on `order-fulfillment-group` skyrocketed to 450,000 messages!
-[14:04:30] Dave K.: The group coordinator was re-elected on broker 2, but all 1,200 consumer instances sent `JoinGroup` at the exact same millisecond.
-[14:07:15] Sarah Jenkins: It's thundering herd. Each consumer times out after 30 seconds and rejoins again. Nothing is actually consuming messages.
-[14:09:50] Dave K.: Manually paused broker rolling restarts. Increasing `max.poll.interval.ms` on consumers temporarily.
-[14:15:30] Dave K.: Tracking this under Jira KAFKA-14209. We need randomized backoff jitter in the consumer coordinator protocol.
-[14:35:10] Dave K.: Merged PR #1421. Staged consumer pods picked up the jitter backoff. Lag cleared in 8 minutes.

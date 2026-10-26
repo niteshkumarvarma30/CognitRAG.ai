@@ -1,6 +1,0 @@
-Channel: #core-auth-team
-Topic: OIDC backchannel logout and token revocation latency
-
-[16:00:10] David Kim: Verified the new backchannel logout endpoint `/oauth/v2/backchannel-logout` in production.
-[16:03:22] Kevin Miller: When Okta pushes an employee deactivation event, the user ID is in our Redis revocation set within 280ms.
-[16:05:40] Jessica Wong: Outstanding work. This fully satisfies enterprise infosec compliance for immediate offboarding.

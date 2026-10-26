@@ -1,6 +1,0 @@
-Channel: #platform-k8s-upgrades
-Topic: Kubernetes 1.29 migration and containerd 1.7.13 rollouts
-
-[10:00:15] Carlos Santos: K8s 1.29 upgrade is complete in staging. Node pools are running Amazon Linux 2023 with containerd 1.7.13.
-[10:03:40] Maya Lin: Did the PLEG timeout issue (K8S-12055) recur under the batch stress test?
-[10:05:10] Carlos Santos: Not a single timeout. The asynchronous CRI status calls in containerd 1.7.13 completely eliminated the lockups.

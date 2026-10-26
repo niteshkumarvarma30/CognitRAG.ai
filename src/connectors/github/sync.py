@@ -30,11 +30,16 @@ class GitHubConnector:
     async def _get_installation_token(self, tenant_id: str) -> Optional[str]:
         """Fetch stored GitHub installation or access token for tenant."""
         try:
+            from src.api.routes import get_tenant_uuid
             supa = get_supabase()
-            resp = supa.table("tenant_integrations").select("credentials").eq("tenant_id", tenant_id).eq("integration_type", "github").single().execute()
-            if resp.data and "credentials" in resp.data:
-                creds = resp.data["credentials"]
-                return creds.get("access_token") or creds.get("token")
+            uuid_tenant = get_tenant_uuid(tenant_id)
+            candidate_ids = list(set([tenant_id, uuid_tenant]))
+            resp = supa.table("tenant_integrations").select("*").in_("tenant_id", candidate_ids).eq("integration_type", "github").execute()
+            if resp.data:
+                for row in resp.data:
+                    token = row.get("access_token") or (row.get("credentials") or {}).get("access_token") or (row.get("extra_data") or {}).get("access_token")
+                    if token:
+                        return token
         except Exception as e:
             logger.error(f"Failed to load GitHub credentials for tenant {tenant_id}: {e}")
         return None

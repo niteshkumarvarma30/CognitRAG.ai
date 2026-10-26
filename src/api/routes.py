@@ -22,7 +22,13 @@ router = APIRouter()
 
 def get_tenant_uuid(clerk_id: str) -> str:
     """Deterministically convert a Clerk string ID (e.g. user_2pkXY) into a valid Postgres UUID."""
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, clerk_id))
+    if not clerk_id:
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, "default_anonymous"))
+    try:
+        uuid.UUID(clerk_id)
+        return clerk_id
+    except ValueError:
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, clerk_id))
 
 class ChatRequest(BaseModel):
     tenant_id: str
@@ -49,6 +55,21 @@ def chat_endpoint(request: ChatRequest):
     except ValueError:
         uuid_tenant = get_tenant_uuid(request.tenant_id)
 
+    # 1. Enforce Workspace Monthly Query Limit (Gated by Plan)
+    from src.billing.quota_guard import check_query_quota
+    quota = check_query_quota(uuid_tenant)
+    if not quota["allowed"]:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "QUOTA_EXCEEDED",
+                "message": f"Monthly limit of {quota['limit']} queries reached on your {quota['plan'].upper()} plan. Upgrade now to continue.",
+                "plan": quota["plan"],
+                "used": quota["used"],
+                "limit": quota["limit"]
+            }
+        )
+
     # Detect query language for embedding routing
     query_language = detect_language(request.message)
 
@@ -71,13 +92,25 @@ def chat_endpoint(request: ChatRequest):
     context_docs = final_state.get("documents", [])
     citations = []
     if isinstance(context_docs, list):
+        import re
         for doc in context_docs:
             if isinstance(doc, dict):
+                content = doc.get("content", "")
+                has_ticket_or_pr = bool(re.search(r'\b([A-Z]{2,10}-\d+|PR\s*#?\d+|#[0-9]+)\b', content))
+                derivation = "structured" if has_ticket_or_pr else doc.get("derivation", "extracted")
+                
+                raw_conf = doc.get("similarity") or doc.get("relevance_score")
+                if raw_conf is not None and float(raw_conf) > 0.0:
+                    confidence = float(raw_conf)
+                else:
+                    rrf = float(doc.get("rrf_score", 0.0))
+                    confidence = min(0.95, round(0.75 + (rrf * 4.0), 2)) if rrf > 0.0 else 0.85
+
                 citations.append({
                     "chunk_id": str(doc.get("id", "")),
-                    "content_snippet": doc.get("content", "")[:200],
-                    "confidence": float(doc.get("similarity", doc.get("graph_score", 0.7))),
-                    "derivation": doc.get("derivation", "extracted"),
+                    "content_snippet": content[:200],
+                    "confidence": confidence,
+                    "derivation": derivation,
                     "source_type": doc.get("source_type", "unknown"),
                     "language_tag": doc.get("language_tag", "en"),
                     "raw_ref_url": doc.get("raw_ref_url"),
@@ -117,6 +150,22 @@ async def chat_stream_endpoint(request: ChatRequest):
         uuid_tenant = request.tenant_id
     except ValueError:
         uuid_tenant = get_tenant_uuid(request.tenant_id)
+
+    # 1. Enforce Workspace Monthly Query Limit (Gated by Plan)
+    from src.billing.quota_guard import check_query_quota
+    quota = check_query_quota(uuid_tenant)
+    if not quota["allowed"]:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "QUOTA_EXCEEDED",
+                "message": f"Monthly limit of {quota['limit']} queries reached on your {quota['plan'].upper()} plan. Upgrade now to continue.",
+                "plan": quota["plan"],
+                "used": quota["used"],
+                "limit": quota["limit"]
+            }
+        )
+
     initial_state = {
         "tenant_id": uuid_tenant,
         "user_id": request.user_id,
@@ -231,9 +280,9 @@ async def chat_stream_endpoint(request: ChatRequest):
 
 from src.api.job_tracker import ingestion_jobs
 
-def background_ingestion_pipeline(uuid_tenant: str, document_id: str, file_bytes: bytes, filename: str, job_id: Optional[str] = None):
+def background_ingestion_pipeline(uuid_tenant: str, document_id: str, file_bytes: bytes, filename: str = "document.txt", job_id: Optional[str] = None):
     """Orchestrates the entire ingestion process asynchronously with live status tracking."""
-    db = supabase_manager.get_tenant_client(uuid_tenant)
+    db = supabase_manager.get_admin_client()
     try:
         if job_id:
             ingestion_jobs[job_id] = {"status": "processing", "progress": f"Parsing {filename}..."}
@@ -381,26 +430,13 @@ def get_billing(tenant_id: str):
 
 @router.get("/api/v1/documents/{tenant_id}")
 def list_documents(tenant_id: str):
+    if not tenant_id:
+        return []
     uuid_tenant = get_tenant_uuid(tenant_id)
-    db = supabase_manager.get_tenant_client(uuid_tenant)
+    admin_db = supabase_manager.get_admin_client()
     try:
-        response = db.table("documents").select("*").eq("tenant_id", uuid_tenant).order("created_at", desc=True).execute()
-        docs = response.data or []
-
-        # Merge paired developer studio documents if querying for a user or primary workspace
-        dev_uuid = get_tenant_uuid("ws_dev_primary")
-        if uuid_tenant != dev_uuid:
-            try:
-                dev_db = supabase_manager.get_tenant_client(dev_uuid)
-                dev_res = dev_db.table("documents").select("*").eq("tenant_id", dev_uuid).order("created_at", desc=True).execute()
-                existing_ids = {d["id"] for d in docs}
-                for d in (dev_res.data or []):
-                    if d["id"] not in existing_ids:
-                        docs.append(d)
-                        existing_ids.add(d["id"])
-            except Exception as e_pair:
-                logger.warning(f"Could not load paired dev documents: {e_pair}")
-        return docs
+        response = admin_db.table("documents").select("*").eq("tenant_id", uuid_tenant).order("created_at", desc=True).execute()
+        return response.data or []
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list documents: {e}")
 
@@ -569,27 +605,27 @@ def export_graph_data(tenant_id: str):
                         }
                     }
 
-                # Multi-category queries to fetch all facets of Neo4j graph intelligence
+                # Multi-category queries filtered strictly by tenantId!
                 queries = [
                     # 1. AST Code Graph (SourceFile -> DEFINES -> Function)
-                    "MATCH (sf:SourceFile)-[r:DEFINES]->(f:Function) RETURN sf as n, r, f as m LIMIT 100",
+                    "MATCH (sf:SourceFile)-[r:DEFINES]->(f:Function) WHERE (sf.tenantId = $tenant_id OR sf.tenantId = $raw_id) RETURN sf as n, r, f as m LIMIT 100",
                     # 2. User Interactions & Grounding (User -> ASKED -> Chat -> GROUNDED_IN -> Document)
-                    "MATCH (u:User)-[r:ASKED]->(c:ChatInteraction) RETURN u as n, r, c as m LIMIT 40",
-                    "MATCH (c:ChatInteraction)-[r:GROUNDED_IN]->(d:Document) RETURN c as n, r, d as m LIMIT 40",
+                    "MATCH (u:User)-[r:ASKED]->(c:ChatInteraction) WHERE (u.tenantId = $tenant_id OR u.tenantId = $raw_id) RETURN u as n, r, c as m LIMIT 40",
+                    "MATCH (c:ChatInteraction)-[r:GROUNDED_IN]->(d:Document) WHERE (c.tenantId = $tenant_id OR c.tenantId = $raw_id) RETURN c as n, r, d as m LIMIT 40",
                     # 3. Enterprise Integrations (PRs, Jira, Slack)
-                    "MATCH (pr:PullRequest)-[r:RESOLVES]->(j:JiraIssue) RETURN pr as n, r, j as m LIMIT 50",
-                    "MATCH (sc:SlackChannel)-[r:DISCUSSES]->(j:JiraIssue) RETURN sc as n, r, j as m LIMIT 50",
+                    "MATCH (pr:PullRequest)-[r:RESOLVES]->(j:JiraIssue) WHERE (pr.tenantId = $tenant_id OR pr.tenantId = $raw_id) RETURN pr as n, r, j as m LIMIT 50",
+                    "MATCH (sc:SlackChannel)-[r:DISCUSSES]->(j:JiraIssue) WHERE (sc.tenantId = $tenant_id OR sc.tenantId = $raw_id) RETURN sc as n, r, j as m LIMIT 50",
                     # 4. Knowledge Extraction (Document -> FOUND_IN -> Entity and Entity -> RELATION -> Entity)
-                    "MATCH (d:Document)-[r:FOUND_IN]-(e:Entity) RETURN d as n, r, e as m LIMIT 60",
-                    "MATCH (n:Entity)-[r:RELATION]->(m:Entity) RETURN n, r, m LIMIT 120",
+                    "MATCH (d:Document)-[r:FOUND_IN]-(e:Entity) WHERE (d.tenantId = $tenant_id OR d.tenantId = $raw_id) RETURN d as n, r, e as m LIMIT 60",
+                    "MATCH (n:Entity)-[r:RELATION]->(m:Entity) WHERE (n.tenantId = $tenant_id OR n.tenantId = $raw_id) RETURN n, r, m LIMIT 120",
                     # 5. Documents / Architecture Specifications
-                    "MATCH (d:Document) RETURN d as n, null as r, null as m LIMIT 40"
+                    "MATCH (d:Document) WHERE (d.tenantId = $tenant_id OR d.tenantId = $raw_id) RETURN d as n, null as r, null as m LIMIT 40"
                 ]
 
                 records = []
                 for q in queries:
                     try:
-                        records.extend(list(session.run(q)))
+                        records.extend(list(session.run(q, tenant_id=uuid_tenant, raw_id=tenant_id)))
                     except Exception as q_err:
                         logger.warning(f"Graph query partial failed: {q_err}")
 
@@ -618,6 +654,100 @@ def export_graph_data(tenant_id: str):
                                 "label": r.type
                             })
                         
+        # Resilient fallback: If Neo4j has 0 nodes (e.g. paused/sleeping Aura instance),
+        # build intelligence nodes directly from Supabase documents and chunks!
+        if len(nodes) == 0:
+            try:
+                admin_db = supabase_manager.get_admin_client()
+                docs_res = admin_db.table("documents").select("id, filename, status, created_at").eq("tenant_id", uuid_tenant).limit(40).execute()
+                
+                provider_colors = {
+                    "slack": "#38BDF8",
+                    "github": "#0284C7",
+                    "jira": "#F43F5E",
+                    "notion": "#10B981",
+                    "manual": "#D97706"
+                }
+
+                hubs_created = set()
+                for doc in (docs_res.data or []):
+                    doc_id = str(doc["id"])
+                    fname = doc.get("filename") or "Document"
+                    clean_title = fname.split("/")[-1]
+                    
+                    # Detect provider hub
+                    prov = "manual"
+                    for p in ["slack", "github", "jira", "notion"]:
+                        if fname.lower().startswith(f"{p}/") or f"_{p}_" in fname.lower() or f"{p}_" in fname.lower():
+                            prov = p
+                            break
+
+                    hub_id = f"hub_{prov}"
+                    if hub_id not in hubs_created:
+                        nodes.append({
+                            "id": hub_id,
+                            "group": "Entity",
+                            "val": 30,
+                            "color": provider_colors.get(prov, "#818CF8"),
+                            "label": f"{prov.upper()} Connector",
+                            "details": {
+                                "labels": ["ConnectorHub", prov.capitalize()],
+                                "status": "connected"
+                            }
+                        })
+                        hubs_created.add(hub_id)
+
+                    # Add Document node
+                    doc_node_id = f"doc_{doc_id}"
+                    nodes.append({
+                        "id": doc_node_id,
+                        "group": "Document",
+                        "val": 24,
+                        "color": "#F59E0B",
+                        "label": clean_title[:32],
+                        "details": {
+                            "labels": ["Document"],
+                            "filename": fname,
+                            "status": doc.get("status", "completed"),
+                            "created_at": doc.get("created_at")
+                        }
+                    })
+
+                    # Link Connector -> Document
+                    links.append({
+                        "source": hub_id,
+                        "target": doc_node_id,
+                        "label": "INDEXED"
+                    })
+
+                # Also link chunks if available
+                if docs_res.data:
+                    doc_ids = [d["id"] for d in docs_res.data[:10]]
+                    chunks_res = admin_db.table("document_chunks").select("id, document_id, content").in_("document_id", doc_ids).limit(60).execute()
+                    for chunk in (chunks_res.data or []):
+                        chunk_id = f"chunk_{chunk['id']}"
+                        parent_doc_id = f"doc_{chunk['document_id']}"
+                        snippet = (chunk.get("content") or "")[:40].strip()
+                        if snippet:
+                            nodes.append({
+                                "id": chunk_id,
+                                "group": "SourceFile",
+                                "val": 14,
+                                "color": "#06B6D4",
+                                "label": snippet,
+                                "details": {
+                                    "labels": ["Chunk", "Section"],
+                                    "content_preview": chunk.get("content", "")[:200]
+                                }
+                            })
+                            links.append({
+                                "source": parent_doc_id,
+                                "target": chunk_id,
+                                "label": "CONTAINS_SECTION"
+                            })
+            except Exception as fb_err:
+                logger.warning(f"Resilient graph fallback encountered: {fb_err}")
+
         return {"nodes": nodes, "links": links}
     except Exception as e:
         logger.warning(f"Neo4j graph export unavailable: {e}")

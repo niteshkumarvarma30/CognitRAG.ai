@@ -52,7 +52,7 @@ export default function GraphExplorer() {
   const rotationAngleRef = useRef(0);
   const animationFrameRef = useRef(null);
 
-  const tenantId = user?.id || 'ws_1';
+  const tenantId = user?.id || (typeof window !== 'undefined' ? localStorage.getItem('cognitrag_tenant_id') : '') || '';
 
   // ResizeObserver to fill 100% of parent dashboard container
   useEffect(() => {
@@ -447,7 +447,7 @@ export default function GraphExplorer() {
             </button>
 
             <Link
-              href="/dev-studio"
+              href="/ask"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -463,8 +463,8 @@ export default function GraphExplorer() {
                 boxShadow: '0 2px 10px rgba(79, 70, 229, 0.25)'
               }}
             >
-              <Cpu size={13} />
-              Code Studio
+              <MessageSquare size={13} />
+              Ask Brain
             </Link>
           </div>
         </div>
@@ -580,12 +580,21 @@ export default function GraphExplorer() {
           nodeOpacity={0.92}
           nodeLabel={(n) => `${n.group}: ${n.label}`}
           linkLabel={(l) => `Rel: ${l.label}`}
-          linkWidth={1.8}
-          linkColor={() => 'rgba(99, 91, 255, 0.35)'}
+          linkColor={(l) => {
+            if (l.derivation === 'structured' || l.confidence === 1.0) {
+              return 'rgba(16, 185, 129, 0.65)'; // Green for structured
+            }
+            return 'rgba(245, 158, 11, 0.65)'; // Amber for extracted
+          }}
           linkDirectionalParticles={3}
           linkDirectionalParticleWidth={2.2}
           linkDirectionalParticleSpeed={0.006}
-          linkDirectionalParticleColor={() => '#635BFF'}
+          linkDirectionalParticleColor={(l) => {
+            if (l.derivation === 'structured' || l.confidence === 1.0) {
+              return '#10b981';
+            }
+            return '#f59e0b';
+          }}
           linkDirectionalArrowLength={4.5}
           linkDirectionalArrowRelPos={1}
           backgroundColor="rgba(0, 0, 0, 0)"
@@ -596,7 +605,7 @@ export default function GraphExplorer() {
         />
       )}
 
-      {/* ── Bottom HUD Information Strip (Light Mode) ── */}
+      {/* ── Bottom HUD Information Strip (Derivation Legend) ── */}
       <div className="graph-bottom-hud" style={{
         position: 'absolute',
         bottom: 14,
@@ -617,6 +626,16 @@ export default function GraphExplorer() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#059669', boxShadow: '0 0 6px rgba(5, 150, 105, 0.4)' }} />
           <span style={{ color: '#0F172A', fontWeight: 700 }}>{filteredData.nodes.length}</span> Active Nodes
+        </div>
+        <div style={{ width: 1, height: 12, background: '#CBD5E1' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: '#10b981' }} />
+          <span style={{ color: '#0F172A', fontWeight: 600 }}>Structured Edge</span> (1.0)
+        </div>
+        <div style={{ width: 1, height: 12, background: '#CBD5E1' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b' }} />
+          <span style={{ color: '#0F172A', fontWeight: 600 }}>Extracted Edge</span> (LLM)
         </div>
         <div style={{ width: 1, height: 12, background: '#E2E8F0' }} />
         <div>
@@ -775,31 +794,29 @@ export default function GraphExplorer() {
             )}
           </div>
 
-          {/* Dev Studio Hop Button */}
-          {(selectedNode.group === 'Function' || selectedNode.group === 'SourceFile') && (
-            <Link
-              href={`/dev-studio?file=${encodeURIComponent(selectedNode.details?.path || '')}&symbol=${encodeURIComponent(selectedNode.label || '')}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                padding: '7px 10px',
-                background: 'linear-gradient(135deg, #4F46E5, #6366F1)',
-                borderRadius: 8,
-                color: '#FFFFFF',
-                fontSize: '0.75rem',
-                fontWeight: 650,
-                textDecoration: 'none',
-                textAlign: 'center',
-                marginTop: 2,
-                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)'
-              }}
-            >
-              <ExternalLink size={12} />
-              Inspect in Developer Code Studio
-            </Link>
-          )}
+          {/* Query Brain Action */}
+          <Link
+            href={`/ask?q=${encodeURIComponent('Explain the entity ' + (selectedNode.label || '') + ' and its relationships.')}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              padding: '8px 12px',
+              background: 'linear-gradient(135deg, #4F46E5, #6366F1)',
+              borderRadius: 8,
+              color: '#FFFFFF',
+              fontSize: '0.75rem',
+              fontWeight: 650,
+              textDecoration: 'none',
+              textAlign: 'center',
+              marginTop: 6,
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)'
+            }}
+          >
+            <MessageSquare size={13} />
+            Ask Brain About This Entity
+          </Link>
         </div>
       )}
     </div>

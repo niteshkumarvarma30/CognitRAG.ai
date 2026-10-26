@@ -28,8 +28,19 @@ API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 async def slack_events(request: Request):
     """
     Receives all Slack Events API webhooks.
-    Routes to the Slack Bolt App handler.
+    Handles Slack's url_verification challenge handshake natively,
+    then routes all events to the Slack Bolt App handler.
     """
+    try:
+        raw_body = await request.body()
+        if raw_body:
+            payload = json.loads(raw_body.decode("utf-8"))
+            if payload.get("type") == "url_verification":
+                challenge = payload.get("challenge")
+                return JSONResponse(content={"challenge": challenge})
+    except Exception:
+        pass
+
     from src.bots.slack_app import handler
     return await handler.handle(request)
 

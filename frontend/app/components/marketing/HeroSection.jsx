@@ -93,54 +93,150 @@ export default function HeroSection({ onOpenEarlyAccess }) {
             CognitRAG connects Slack, GitHub, Jira and Notion to give engineering teams verifiable answers. Every claim is tagged with exact source evidence, whether asked in English or mixed Hinglish.
           </p>
 
-          {/* CTAs */}
+          {/* Plan Choice Cards: Solo & Teams Login / Signup */}
           <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: '14px',
-            paddingTop: '8px'
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '12px',
+            paddingTop: '4px',
+            maxWidth: '520px'
           }}>
-            <button
-              onClick={onOpenEarlyAccess}
-              style={{
-                backgroundColor: 'var(--ind)',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '12px 22px',
-                fontSize: '0.95rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'opacity 0.15s ease'
-              }}
-              onMouseEnter={(e) => (e.target.style.opacity = '0.9')}
-              onMouseLeave={(e) => (e.target.style.opacity = '1')}
-            >
-              Get early access
-              <ArrowRight size={16} />
-            </button>
+            {/* Teams Plan Card */}
+            <div style={{
+              backgroundColor: 'var(--bg2)',
+              border: '1.5px solid var(--ind)',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              boxShadow: '0 4px 20px rgba(129, 140, 248, 0.12)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.98rem', color: 'var(--ink)' }}>Teams Plan</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--mute)' }}>$99 / month &bull; 5 Seats</div>
+                </div>
+                <span style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 650,
+                  color: 'var(--ind)',
+                  backgroundColor: 'rgba(129, 140, 248, 0.15)',
+                  padding: '2px 7px',
+                  borderRadius: '12px',
+                  letterSpacing: '0.02em'
+                }}>
+                  Popular
+                </span>
+              </div>
+              <div style={{ display: 'flex', width: '100%' }}>
+                <a
+                  href="/sign-up?plan=teams"
+                  style={{
+                    width: '100%',
+                    backgroundColor: 'var(--ind)',
+                    color: '#FFFFFF',
+                    textDecoration: 'none',
+                    borderRadius: '6px',
+                    padding: '9px 12px',
+                    fontSize: '0.84rem',
+                    fontWeight: 650,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 8px rgba(129, 140, 248, 0.25)',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                >
+                  Sign Up / Log In <ArrowRight size={13} />
+                </a>
+              </div>
+            </div>
 
+            {/* Solo Plan Card */}
+            <div style={{
+              backgroundColor: 'var(--bg2)',
+              border: '1px solid var(--line)',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.98rem', color: 'var(--ink)' }}>Solo Plan</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--mute)' }}>$29 / month &bull; 1 Seat</div>
+                </div>
+                <span style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  color: 'var(--mute)',
+                  backgroundColor: 'var(--bg)',
+                  padding: '2px 7px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--line)'
+                }}>
+                  Individual
+                </span>
+              </div>
+              <div style={{ display: 'flex', width: '100%' }}>
+                <a
+                  href="/sign-up?plan=solo"
+                  style={{
+                    width: '100%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid var(--line)',
+                    color: 'var(--ink)',
+                    textDecoration: 'none',
+                    borderRadius: '6px',
+                    padding: '9px 12px',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--ind)';
+                    e.currentTarget.style.color = 'var(--ind)';
+                    e.currentTarget.style.backgroundColor = 'rgba(129, 140, 248, 0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--line)';
+                    e.currentTarget.style.color = 'var(--ink)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
+                  }}
+                >
+                  Sign Up / Log In <ArrowRight size={13} />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Sample Answer Link */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', paddingTop: '2px' }}>
             <a
               href="#demo"
               style={{
-                color: 'var(--ink)',
+                color: 'var(--mute)',
                 textDecoration: 'none',
-                border: '1px solid var(--line)',
-                borderRadius: '8px',
-                padding: '12px 20px',
-                fontSize: '0.95rem',
+                fontSize: '0.88rem',
                 fontWeight: 500,
-                backgroundColor: 'var(--bg2)',
-                transition: 'border-color 0.15s ease'
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'color 0.15s ease'
               }}
-              onMouseEnter={(e) => (e.target.style.borderColor = 'var(--ind)')}
-              onMouseLeave={(e) => (e.target.style.borderColor = 'var(--line)')}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ink)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--mute)')}
             >
-              See a sample answer
+              See interactive demo answer &darr;
             </a>
           </div>
 

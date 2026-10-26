@@ -12,11 +12,22 @@ from src.database.supabase_client import supabase_manager
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET", "")
 
-# Initialize Slack Bolt App
+# Temporarily isolate SLACK_CLIENT_ID during App() init to prevent Bolt
+# from auto-enabling FileInstallationStore (which causes "installation no longer available")
+_orig_client_id = os.environ.pop("SLACK_CLIENT_ID", None)
+_orig_client_sec = os.environ.pop("SLACK_CLIENT_SECRET", None)
+
 slack_app = App(
     token=SLACK_BOT_TOKEN,
-    signing_secret=SLACK_SIGNING_SECRET
+    signing_secret=SLACK_SIGNING_SECRET,
+    request_verification_enabled=True
 )
+
+if _orig_client_id:
+    os.environ["SLACK_CLIENT_ID"] = _orig_client_id
+if _orig_client_sec:
+    os.environ["SLACK_CLIENT_SECRET"] = _orig_client_sec
+
 handler = SlackRequestHandler(slack_app)
 
 
@@ -32,6 +43,7 @@ def get_tenant_id_from_team(team_id: str) -> str | None:
             return result.data[0]["id"]
     except Exception as e:
         print(f"Failed to resolve tenant for team {team_id}: {e}")
+    # Return None if not found
     return None
 
 
@@ -66,7 +78,10 @@ def format_slack_response(answer: str, citations: list[dict], contradictions: li
             if derivation == "structured":
                 tier_emoji = "🟢"
                 tier_label = f"STRUCTURED 1.0"
-            elif confidence >= 0.8:
+            elif confidence >= 0.85:
+                tier_emoji = "🟢"
+                tier_label = f"EXTRACTED {confidence:.2f}"
+            elif confidence >= 0.70:
                 tier_emoji = "🟡"
                 tier_label = f"EXTRACTED {confidence:.2f}"
             else:
@@ -121,63 +136,62 @@ def format_slack_response(answer: str, citations: list[dict], contradictions: li
 @slack_app.command("/ask")
 def handle_ask_command(ack, body, say, client):
     """
-    Main end-user command. 
-    Usage: /ask yaar, last sprint mein kya decide kiya tha?
+    Main end-user command.
+    Acknowledge immediately (<300ms) to satisfy Slack's 3-second SLA,
+    then execute RAG pipeline in background thread.
     """
-    ack()  # Acknowledge immediately (Slack requires <3s response)
+    ack()
 
-    question = body.get("text", "").strip()
-    team_id = body.get("team_id")
-    user_id = body.get("user_id")
-    channel_id = body.get("channel_id")
+    import threading
 
-    if not question:
-        say("Please provide a question: `/ask your question here`")
-        return
+    def _process_ask():
+        question = body.get("text", "").strip()
+        team_id = body.get("team_id")
+        user_id = body.get("user_id")
+        channel_id = body.get("channel_id")
 
-    # Show thinking indicator
-    client.chat_postMessage(
-        channel=channel_id,
-        text=f"🔍 Searching company brain for: _{question}_..."
-    )
+        if not question:
+            say("Please provide a question: `/ask your question here`")
+            return
 
-    tenant_id = get_tenant_id_from_team(team_id)
-    if not tenant_id:
-        say("❌ CognitRAG is not configured for this workspace. Ask your admin to visit cognitrag.ai/install")
-        return
+        # Show thinking indicator
+        try:
+            client.chat_postMessage(
+                channel=channel_id,
+                text=f"🔍 Searching company brain for: _{question}_..."
+            )
+        except Exception as e:
+            print(f"Error sending thinking indicator: {e}", flush=True)
 
-    try:
-        # Call the RAG pipeline
-        import requests as req
-        api_base = os.environ.get("API_BASE_URL", "http://localhost:8000")
-        response = req.post(
-            f"{api_base}/api/v1/chat",
-            json={
-                "tenant_id": tenant_id,
-                "user_id": user_id,
-                "message": question,
-                "chat_history": []
-            },
-            timeout=60
-        )
-        response.raise_for_status()
-        data = response.json()
+        tenant_id = get_tenant_id_from_team(team_id)
 
-        answer = data.get("answer", data.get("generation", "No answer found."))
-        citations = data.get("citations", [])
-        contradictions = data.get("contradictions", [])
+        try:
+            from src.api.routes import chat_endpoint, ChatRequest
+            data = chat_endpoint(ChatRequest(
+                tenant_id=tenant_id,
+                user_id=user_id or "slack_user",
+                message=question,
+                chat_history=[]
+            ))
+            if not isinstance(data, dict):
+                data = data.dict() if hasattr(data, "dict") else dict(data)
 
-        blocks = format_slack_response(answer, citations, contradictions)
+            answer = data.get("answer", data.get("generation", "No answer found."))
+            citations = data.get("citations", [])
+            contradictions = data.get("contradictions", [])
 
-        client.chat_postMessage(
-            channel=channel_id,
-            blocks=blocks,
-            text=answer  # Fallback for notifications
-        )
+            blocks = format_slack_response(answer, citations, contradictions)
 
-    except Exception as e:
-        print(f"Slack /ask error: {e}")
-        say(f"❌ Something went wrong. Please try again or contact your admin.")
+            client.chat_postMessage(
+                channel=channel_id,
+                blocks=blocks,
+                text=answer
+            )
+        except Exception as e:
+            print(f"Slack /ask error: {e}", flush=True)
+            say(f"❌ Error querying company brain: {e}")
+
+    threading.Thread(target=_process_ask, daemon=True).start()
 
 
 # ============================================================
@@ -187,47 +201,56 @@ def handle_ask_command(ack, body, say, client):
 def handle_mention(body, say, client):
     """
     Handle @cognitrag mentions in any channel.
-    Strips the mention and processes the question.
+    Executes in background thread to prevent Slack 3-second event timeouts.
     """
-    import re
-    event = body.get("event", {})
-    text = event.get("text", "")
-    channel = event.get("channel")
-    team_id = body.get("team_id")
-    user_id = event.get("user")
+    import threading
 
-    # Remove @mention from text
-    question = re.sub(r'<@\w+>', '', text).strip()
-    if not question:
-        say("What would you like to know? Mention me with a question!")
-        return
+    def _process_mention():
+        import re
+        event = body.get("event", {})
+        text = event.get("text", "")
+        channel = event.get("channel")
+        team_id = body.get("team_id")
+        user_id = event.get("user")
 
-    tenant_id = get_tenant_id_from_team(team_id)
-    if not tenant_id:
-        say("CognitRAG is not configured for this workspace.")
-        return
+        # Remove @mention from text
+        question = re.sub(r'<@\w+>', '', text).strip()
+        if not question:
+            say("What would you like to know? Mention me with a question!")
+            return
 
-    try:
-        import requests as req
-        api_base = os.environ.get("API_BASE_URL", "http://localhost:8000")
-        response = req.post(
-            f"{api_base}/api/v1/chat",
-            json={"tenant_id": tenant_id, "user_id": user_id, "message": question, "chat_history": []},
-            timeout=60
-        )
-        response.raise_for_status()
-        data = response.json()
+        try:
+            client.chat_postMessage(
+                channel=channel,
+                text=f"🔍 Searching company brain for: _{question}_..."
+            )
+        except Exception as e:
+            print(f"Error sending mention indicator: {e}", flush=True)
 
-        answer = data.get("answer", data.get("generation", "No answer found."))
-        citations = data.get("citations", [])
-        contradictions = data.get("contradictions", [])
+        tenant_id = get_tenant_id_from_team(team_id)
 
-        blocks = format_slack_response(answer, citations, contradictions)
-        client.chat_postMessage(channel=channel, blocks=blocks, text=answer)
+        try:
+            from src.api.routes import chat_endpoint, ChatRequest
+            data = chat_endpoint(ChatRequest(
+                tenant_id=tenant_id,
+                user_id=user_id or "slack_user",
+                message=question,
+                chat_history=[]
+            ))
+            if not isinstance(data, dict):
+                data = data.dict() if hasattr(data, "dict") else dict(data)
 
-    except Exception as e:
-        print(f"Slack mention error: {e}")
-        say("Something went wrong. Please try again.")
+            answer = data.get("answer", data.get("generation", "No answer found."))
+            citations = data.get("citations", [])
+            contradictions = data.get("contradictions", [])
+
+            blocks = format_slack_response(answer, citations, contradictions)
+            client.chat_postMessage(channel=channel, blocks=blocks, text=answer)
+        except Exception as e:
+            print(f"Slack mention error: {e}", flush=True)
+            say(f"❌ Error querying company brain: {e}")
+
+    threading.Thread(target=_process_mention, daemon=True).start()
 
 
 # ============================================================

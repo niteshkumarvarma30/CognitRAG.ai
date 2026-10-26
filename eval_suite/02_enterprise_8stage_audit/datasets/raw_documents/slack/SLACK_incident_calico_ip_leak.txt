@@ -1,9 +1,0 @@
-Channel: #incident-2024-06-02-calico-ip-leak
-Topic: Pod creation failure in payment-gateway namespace (no IPs available)
-
-[11:32:00] Carlos Santos: Alert from Alertmanager: `KubePodNotReady` firing in `payment-gateway`. 45 pods stuck in `ContainerCreating`.
-[11:34:12] Maya Lin: Kubelet event log: `failed to allocate for range: no IP addresses available in range set: 10.244.32.1-10.244.32.64`.
-[11:37:40] Carlos Santos: But there are only 14 active pods on node `ip-10-244-32-12`. Why is the /26 block exhausted?
-[11:39:10] Maya Lin: Calico IPAM is holding leases for deleted pods from the flash sale autoscaling spike 30 minutes ago. `autoReleaseUnusedPerNodeBlocks` is set to false in our CNI config!
-[11:42:00] Maya Lin: Filed Jira K8S-11942. Running `calicoctl ipam release --unallocated` now to clear orphaned leases immediately.
-[11:46:15] Maya Lin: Immediate pressure relieved. Created PR #1195 to permanently set `autoReleaseUnusedPerNodeBlocks: true` and reduce releaseTimeout to 5 minutes.

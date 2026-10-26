@@ -1,7 +1,0 @@
-Channel: #architecture-infra
-Topic: Architecture discussions on multi-region Aurora and pgvector scaling
-
-[09:30:15] Elena Rostova: Team, as our document embedding volume approaches 10 million vectors, what is our target HNSW index configuration in Supabase?
-[09:33:00] Liam Zhao: In RFC-106, we benchmarked `m = 16` and `ef_construction = 64`. Memory footprint was ~4.2GB, and query latency was 14ms for Recall@10 of 98.2%.
-[09:36:20] Chen Wei: Make sure maintenance work mem is increased to at least 2GB during index rebuilds, otherwise Postgres falls back to disk spills.
-[09:40:10] Priya Patel: Also let's ensure all tenant vector queries pass through the deterministic tenant_id UUID5 filter so we don't scan foreign tenant partitions.

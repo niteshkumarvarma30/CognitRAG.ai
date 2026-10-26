@@ -1,199 +1,149 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { Brain, FileText, Network, MessageSquare, ShieldCheck, Activity } from 'lucide-react';
-import { useUser, useAuth } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useState, useEffect } from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Brain, Loader2, ArrowRight } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
+import { getApiUrl } from '@/lib/api';
+import Link from 'next/link';
 
-const HomeDashboard = () => {
+export default function HomePage() {
   const { user } = useUser();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const router = useRouter();
-  
-  const [metrics, setMetrics] = useState({
-    documents_ingested: 0,
-    graph_connections: 0,
-    memories_stored: 0,
-    queries_answered: 0,
-    brain_health: 98
-  });
-  
-  const [activityFeed, setActivityFeed] = useState([
-    { id: 1, type: 'query', text: 'CFO asked about Q3 Churn Risk', time: 'Just now', color: '#F48D16' },
-    { id: 2, type: 'ingest', text: 'Parsed Q2_Financials.pdf', time: '5 mins ago', color: '#d4d4d8' },
-    { id: 3, type: 'graph', text: 'Mapped 142 new entity relations', time: '12 mins ago', color: '#a1a1aa' },
-    { id: 4, type: 'semantic', text: 'Updated definition for "Active Customer"', time: '1 hour ago', color: '#71717a' }
-  ]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tenantId, setTenantId] = useState(null);
 
   useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      router.push('/sign-in');
-      return;
+    if (user) {
+      const tid = localStorage.getItem('cognitrag_tenant_id');
+      setTenantId(tid);
+      loadStats(tid);
     }
-
-    const fetchMetrics = async () => {
-      if (!user) return;
-      try {
-        const token = await getToken();
-        const headers = { 'Authorization': `Bearer ${token}` };
-        // We simulate some real-looking data here since the backend endpoints for these exact stats
-        // might need to be aggregated from Supabase.
-        setMetrics({
-          documents_ingested: 24,
-          graph_connections: 1845,
-          memories_stored: 12,
-          queries_answered: 48,
-          brain_health: 94
-        });
-      } catch (err) {
-        console.error("Failed to fetch metrics:", err);
-      }
-    };
-    fetchMetrics();
   }, [user]);
 
-  const gaugeData = [
-    { name: 'Health', value: metrics.brain_health },
-    { name: 'Empty', value: 100 - metrics.brain_health }
-  ];
-
-  const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: (i) => ({
-      opacity: 1,
-      y: 0,
-      transition: { delay: i * 0.1, duration: 0.5, type: 'spring' }
-    })
+  const loadStats = async (tid) => {
+    if (!tid) { setLoading(false); return; }
+    try {
+      const res = await fetch(`${getApiUrl()}/api/v1/admin/stats?tenant_id=${tid}`);
+      if (res.ok) setStats(await res.json());
+    } catch (e) { /* non-critical */ }
+    setLoading(false);
   };
 
+  const integrations = [
+    { id: 'slack',   label: 'Slack App',    emoji: '💬', href: '/integrations' },
+    { id: 'github',  label: 'GitHub App',   emoji: '🐙', href: '/integrations' },
+    { id: 'jira',    label: 'Jira',         emoji: '📋', href: '/integrations' },
+    { id: 'notion',  label: 'Notion',       emoji: '📓', href: '/integrations' },
+    { id: 'drive',   label: 'Google Drive', emoji: '📁', href: '/integrations' },
+    { id: 'meeting', label: 'Meeting Bot',  emoji: '📹', href: '/integrations' },
+  ];
+
+  const getIntegrationStatus = (id) => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(`cognitrag_integration_${id}`) === 'connected';
+  };
+
+  const langDist = stats?.language_distribution || { en: 60, 'hi-latn': 25, mixed: 15 };
+  const contradictionCount = stats?.unresolved_contradictions || 0;
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-      {/* 1. Mission Control Hero */}
-      <div className="welcome-banner" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-light)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <motion.h1 
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="welcome-title" 
-            >
-              Your Company Brain is Active.
-            </motion.h1>
-            <p className="welcome-subtitle">All knowledge layers are synchronized and ready for queries.</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(244, 141, 22, 0.1)', padding: '0.75rem 1.5rem', borderRadius: '99px', border: '1px solid rgba(244, 141, 22, 0.2)' }}>
-            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#F48D16', boxShadow: '0 0 12px #F48D16', animation: 'pulse 2s infinite' }}></div>
-            <span style={{ color: '#F48D16', fontWeight: '600', letterSpacing: '1px', fontSize: '0.9rem' }}>SYSTEM ONLINE</span>
-          </div>
+    <div style={{ padding: '2rem', maxWidth: '1000px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <Brain size={28} style={{ color: 'var(--accent)' }} />
+          <h1 style={{ fontSize: '1.7rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
+            Company Brain
+          </h1>
+        </div>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+          {user?.firstName ? `Welcome back, ${user.firstName}.` : 'Welcome.'} Your team can use{' '}
+          <code style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.82rem' }}>/ask</code>{' '}
+          in Slack to query the brain.
+        </p>
+      </div>
+
+      {/* Integration Status Grid */}
+      <div style={{ marginBottom: '2.5rem' }}>
+        <h2 style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '1rem' }}>
+          Connections
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+          {integrations.map(integration => {
+            const connected = getIntegrationStatus(integration.id);
+            return (
+              <Link key={integration.id} href={integration.href} style={{ textDecoration: 'none' }}>
+                <div style={{
+                  padding: '1rem',
+                  borderRadius: '14px',
+                  border: `1px solid ${connected ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.07)'}`,
+                  background: connected ? 'rgba(34,197,94,0.04)' : 'rgba(255,255,255,0.02)',
+                  cursor: 'pointer', transition: 'all 0.2s'
+                }}>
+                  <div style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>{integration.emoji}</div>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.3rem' }}>{integration.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}>
+                    {connected
+                      ? <><CheckCircle2 size={12} color="#22c55e" /> <span style={{ color: '#22c55e' }}>Connected</span></>
+                      : <><XCircle size={12} color="var(--text-muted)" /> <span style={{ color: 'var(--text-muted)' }}>Not connected</span></>
+                    }
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
 
-      {/* 2. Live Stats Row */}
-      <div className="metrics-grid">
-        {[
-          { label: 'Documents Ingested', value: metrics.documents_ingested, icon: FileText, color: 'orange', hex: '#F48D16' },
-          { label: 'Graph Connections', value: metrics.graph_connections, icon: Network, color: 'gray', hex: '#a1a1aa' },
-          { label: 'Memories Stored', value: metrics.memories_stored, icon: Brain, color: 'gray', hex: '#d4d4d8' },
-          { label: 'Queries Answered', value: metrics.queries_answered, icon: MessageSquare, color: 'orange', hex: '#F48D16' }
-        ].map((stat, i) => (
-          <motion.div custom={i} initial="hidden" animate="visible" variants={cardVariants} key={i} className={`metric-card glass-panel ${stat.color}`}>
-            <div className="flex-row" style={{ justifyContent: 'space-between' }}>
-              <div>
-                <div className="metric-label" style={{ color: 'var(--text-muted)' }}><stat.icon size={16} color={stat.hex} /> {stat.label}</div>
-                <div className="metric-value">{(stat.value ?? 0).toLocaleString()}</div>
+      {/* Brain Stats */}
+      {stats && (
+        <div style={{ marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '1rem' }}>
+            Brain Stats
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+            {[
+              { label: 'Documents', value: stats.document_count?.toLocaleString() || '0' },
+              { label: 'Chunks', value: stats.chunk_count?.toLocaleString() || '0' },
+              { label: 'EN Content', value: `${langDist.en || 0}%` },
+              { label: 'HI-LATN Content', value: `${langDist['hi-latn'] || 0}%` },
+            ].map(s => (
+              <div key={s.label} style={{
+                padding: '1rem', borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.07)',
+                background: 'rgba(255,255,255,0.02)'
+              }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--accent)' }}>{s.value}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{s.label}</div>
               </div>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: `${stat.hex}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <stat.icon size={24} color={stat.hex} />
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="split-view" style={{ marginTop: '2rem' }}>
-        {/* 3. Live Activity Feed */}
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }} className="glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Live Activity Feed</span>
-            <Activity size={18} color="var(--accent)" />
+            ))}
           </div>
-          <div className="panel-body" style={{ flex: 1, overflowY: 'auto' }}>
-            <div className="timeline-list" style={{ gap: '1rem' }}>
-              {activityFeed.map((activity, i) => (
-                <motion.div initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.5 + (i * 0.1) }} key={activity.id} className="timeline-item" style={{ gap: '1rem' }}>
-                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: activity.color, marginTop: '6px', zIndex: 2, boxShadow: `0 0 10px ${activity.color}80` }}></div>
-                  <div style={{ flex: 1, background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '0.25rem' }}>{activity.time}</div>
-                    <div style={{ color: 'var(--text-main)', fontSize: '0.95rem' }}>{activity.text}</div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 4. Brain Health & Security */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="glass-panel">
-            <div className="panel-header">Brain Health Score</div>
-            <div className="panel-body" style={{ alignItems: 'center', minHeight: '250px' }}>
-              <div style={{ width: '200px', height: '100px', position: 'relative' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={gaugeData}
-                      cx="50%"
-                      cy="100%"
-                      startAngle={180}
-                      endAngle={0}
-                      innerRadius={70}
-                      outerRadius={90}
-                      paddingAngle={0}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      <Cell fill="#F48D16" />
-                      <Cell fill="rgba(0,0,0,0.05)" />
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, textAlign: 'center' }}>
-                  <span style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{metrics.brain_health}%</span>
-                </div>
-              </div>
-              <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '1rem', fontSize: '0.9rem' }}>
-                Ontology mapping is complete. Vector index is synchronized with Graph edges.
-              </p>
-            </div>
-          </motion.div>
-
-          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }} className="glass-panel">
-            <div className="panel-header">Enterprise Security</div>
-            <div className="panel-body" style={{ minHeight: 'auto', padding: '1.5rem' }}>
-              <div className="flex-col" style={{ gap: '1rem' }}>
-                <div className="flex-row" style={{ gap: '1rem' }}>
-                  <ShieldCheck color="#F48D16" size={24} />
-                  <div>
-                    <div style={{ fontWeight: '600' }}>Row-Level Security (RLS)</div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Tenant isolation active via JWT.</div>
-                  </div>
-                </div>
-                <div className="flex-row" style={{ gap: '1rem' }}>
-                  <ShieldCheck color="#F48D16" size={24} />
-                  <div>
-                    <div style={{ fontWeight: '600' }}>Role-Based Access (RBAC)</div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Strict admin-only ontology editing active.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
         </div>
-      </div>
-    </motion.div>
+      )}
+
+      {/* Contradictions Alert */}
+      {contradictionCount > 0 && (
+        <Link href="/metrics" style={{ textDecoration: 'none' }}>
+          <div style={{
+            padding: '1rem 1.25rem',
+            borderRadius: '12px',
+            border: '1px solid rgba(251,146,60,0.3)',
+            background: 'rgba(251,146,60,0.05)',
+            display: 'flex', alignItems: 'center', gap: '0.75rem',
+            cursor: 'pointer'
+          }}>
+            <AlertTriangle size={18} color="#fb923c" />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fb923c' }}>
+                {contradictionCount} Unresolved Contradiction{contradictionCount > 1 ? 's' : ''}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Review conflicting claims in the Citation Audit dashboard
+              </div>
+            </div>
+            <ArrowRight size={16} color="#fb923c" style={{ marginLeft: 'auto' }} />
+          </div>
+        </Link>
+      )}
+    </div>
   );
-};
-
-export default HomeDashboard;
+}

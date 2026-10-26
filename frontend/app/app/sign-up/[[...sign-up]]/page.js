@@ -1,33 +1,96 @@
 'use client';
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { SignUp } from "@clerk/nextjs";
-import { useSearchParams } from "next/navigation";
+
+import { useSearchParams, useRouter } from 'next/navigation';
 
 function SignUpContent() {
   const searchParams = useSearchParams();
-  const personaParam = searchParams.get('persona');
-  const storedPersona = typeof window !== 'undefined' ? localStorage.getItem('cognitrag_persona') : null;
-  const persona = personaParam || storedPersona;
+  const router = useRouter();
+  const selectedPlan = searchParams.get('plan') || 'teams';
 
-  let forceRedirect = '/dev-studio';
-  if (persona === 'superadmin' || persona === 'admin') {
-    forceRedirect = '/dashboard';
-  } else if (persona === 'company_brain' || persona === 'enterprise_brain') {
-    forceRedirect = '/enterprise-brain';
-  } else if (persona === 'bharat_intelligence') {
-    forceRedirect = '/bharat-intelligence';
-  }
+  useEffect(() => {
+    if (typeof window !== 'undefined' && selectedPlan) {
+      localStorage.setItem('cognitrag_plan', selectedPlan);
+    }
+  }, [selectedPlan]);
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', width: '100vw', background: 'var(--bg)' }}>
-      <SignUp path="/sign-up" routing="path" signInUrl="/sign-in" forceRedirectUrl={forceRedirect} />
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      width: '100vw',
+      background: 'var(--bg, #080B14)',
+      padding: '24px'
+    }}>
+      <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '6px', letterSpacing: '-0.02em' }}>
+          🧠 CognitRAG.ai
+        </h1>
+        <p style={{ color: '#94A3B8', fontSize: '0.9375rem', marginBottom: '14px' }}>
+          Start your 14-day free trial on Company Brain AI
+        </p>
+
+        {/* Solo vs Teams Tier Toggle */}
+        <div style={{
+          display: 'inline-flex',
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          padding: '4px',
+          borderRadius: '8px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          gap: '4px'
+        }}>
+          <button
+            onClick={() => router.push('/sign-up?plan=solo')}
+            style={{
+              padding: '6px 14px',
+              fontSize: '0.82rem',
+              fontWeight: selectedPlan === 'solo' ? 700 : 500,
+              color: selectedPlan === 'solo' ? '#FFFFFF' : '#94a3b8',
+              backgroundColor: selectedPlan === 'solo' ? 'var(--ind, #6366f1)' : 'transparent',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            Solo ($29/mo)
+          </button>
+          <button
+            onClick={() => router.push('/sign-up?plan=teams')}
+            style={{
+              padding: '6px 14px',
+              fontSize: '0.82rem',
+              fontWeight: selectedPlan === 'teams' ? 700 : 500,
+              color: selectedPlan === 'teams' ? '#FFFFFF' : '#94a3b8',
+              backgroundColor: selectedPlan === 'teams' ? 'var(--ind, #6366f1)' : 'transparent',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            Teams ($99/mo)
+          </button>
+        </div>
+      </div>
+
+      <SignUp 
+        path="/sign-up" 
+        routing="path" 
+        signInUrl={`/sign-in?plan=${selectedPlan}`} 
+        forceRedirectUrl="/home"
+      />
     </div>
   );
 }
 
 export default function Page() {
   return (
-    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: '#fff' }}>Loading...</div>}>
+    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: '#F8FAFC' }}>Loading...</div>}>
       <SignUpContent />
     </Suspense>
   );

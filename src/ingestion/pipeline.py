@@ -99,9 +99,11 @@ def resolve_coreferences(chunk: str, language_tag: str = "en") -> str:
         rewritten = vertex_client.generate(
             prompt="Rewrite the following text by replacing all pronouns (it, they, this, these, etc.) with the exact proper nouns they refer to. Do not summarize or change meaning. Return ONLY the rewritten text.\n\nText:\n" + chunk,
             temperature=0.0,
-            max_output_tokens=1024
+            max_output_tokens=2048
         )
-        return rewritten.strip() if rewritten else chunk
+        if rewritten and len(rewritten.strip()) >= len(chunk) * 0.6:
+            return rewritten.strip()
+        return chunk
     except Exception as e:
         print(f"Coreference resolution failed: {e}")
         return chunk
@@ -149,42 +151,46 @@ def write_graph_edges(entities: List[Entity], relationships: List[Relationship],
     doc_lbl = "EvalDocument" if is_eval else "Document"
     tenant_lbl = "EvalTenant" if is_eval else "Tenant"
 
-    with neo4j_manager.driver.session() as session:
-        for ent in entities:
-            session.run(f"""
-                MERGE (e:{lbl} {{name: $name, tenantId: $tenant_id}})
-                ON CREATE SET e.type = $type, e.languageTag = $lang
-                WITH e
-                MATCH (t:{tenant_lbl} {{id: $tenant_id}})
-                MERGE (e)-[:BELONGS_TO]->(t)
-                WITH e
-                MATCH (d:{doc_lbl} {{id: $doc_id}})
-                MERGE (e)-[:FOUND_IN]->(d)
-            """, name=ent.name, type=ent.type, tenant_id=tenant_id,
-                doc_id=document_id, lang=language_tag)
+    try:
+        if neo4j_manager and neo4j_manager.driver:
+            with neo4j_manager.driver.session() as session:
+                for ent in entities:
+                    session.run(f"""
+                        MERGE (e:{lbl} {{name: $name, tenantId: $tenant_id}})
+                        ON CREATE SET e.type = $type, e.languageTag = $lang
+                        WITH e
+                        MATCH (t:{tenant_lbl} {{id: $tenant_id}})
+                        MERGE (e)-[:BELONGS_TO]->(t)
+                        WITH e
+                        MATCH (d:{doc_lbl} {{id: $doc_id}})
+                        MERGE (e)-[:FOUND_IN]->(d)
+                    """, name=ent.name, type=ent.type, tenant_id=tenant_id,
+                        doc_id=document_id, lang=language_tag)
 
-        for rel in relationships:
-            session.run(f"""
-                MATCH (s:{lbl} {{name: $source, tenantId: $tenant_id}})
-                MATCH (t:{lbl} {{name: $target, tenantId: $tenant_id}})
-                MERGE (s)-[r:RELATION {{type: $rel_type, source_chunk_id: $chunk_id}}]->(t)
-                ON CREATE SET
-                    r.derivation = $derivation,
-                    r.confidence = $confidence,
-                    r.language_tag = $lang_tag
-                ON MATCH SET
-                    r.confidence = CASE WHEN r.confidence < $confidence
-                                        THEN $confidence ELSE r.confidence END
-            """,
-                source=rel.source_entity,
-                target=rel.target_entity,
-                rel_type=rel.relation_type,
-                chunk_id=source_chunk_id,
-                derivation=derivation,
-                confidence=rel.confidence,
-                lang_tag=language_tag,
-                tenant_id=tenant_id
-            )
+                for rel in relationships:
+                    session.run(f"""
+                        MATCH (s:{lbl} {{name: $source, tenantId: $tenant_id}})
+                        MATCH (t:{lbl} {{name: $target, tenantId: $tenant_id}})
+                        MERGE (s)-[r:RELATION {{type: $rel_type, source_chunk_id: $chunk_id}}]->(t)
+                        ON CREATE SET
+                            r.derivation = $derivation,
+                            r.confidence = $confidence,
+                            r.language_tag = $lang_tag
+                        ON MATCH SET
+                            r.confidence = CASE WHEN r.confidence < $confidence
+                                                THEN $confidence ELSE r.confidence END
+                    """,
+                        source=rel.source_entity,
+                        target=rel.target_entity,
+                        rel_type=rel.relation_type,
+                        chunk_id=source_chunk_id,
+                        derivation=derivation,
+                        confidence=rel.confidence,
+                        lang_tag=language_tag,
+                        tenant_id=tenant_id
+                    )
+    except Exception as neo_err:
+        print(f"    -> Neo4j graph write skipped: {neo_err}")
 
 
 
@@ -328,15 +334,19 @@ def run_ingestion_pipeline(tenant_id: str, document_id: str,
     doc_lbl = "EvalDocument" if is_eval else "Document"
 
     # Ensure Tenant + Document nodes exist in Neo4j
-    with neo4j_manager.driver.session() as session:
-        session.run(f"MERGE (t:{tenant_lbl} {{id: $tenant_id}})", tenant_id=tenant_id)
-        session.run(f"""
-            MERGE (d:{doc_lbl} {{id: $doc_id}})
-            ON CREATE SET d.tenantId = $tenant_id, d.sourceType = $source_type
-            WITH d
-            MATCH (t:{tenant_lbl} {{id: $tenant_id}})
-            MERGE (d)-[:BELONGS_TO]->(t)
-        """, doc_id=document_id, tenant_id=tenant_id, source_type=source_type)
+    try:
+        if neo4j_manager and neo4j_manager.driver:
+            with neo4j_manager.driver.session() as session:
+                session.run(f"MERGE (t:{tenant_lbl} {{id: $tenant_id}})", tenant_id=tenant_id)
+                session.run(f"""
+                    MERGE (d:{doc_lbl} {{id: $doc_id}})
+                    ON CREATE SET d.tenantId = $tenant_id, d.sourceType = $source_type
+                    WITH d
+                    MATCH (t:{tenant_lbl} {{id: $tenant_id}})
+                    MERGE (d)-[:BELONGS_TO]->(t)
+                """, doc_id=document_id, tenant_id=tenant_id, source_type=source_type)
+    except Exception as neo_err:
+        print(f"    [WARN] Neo4j session setup skipped (instance unreachable/paused): {neo_err}")
 
     print(f"Starting pipeline: {len(parent_chunks)} chunks | lang: {doc_language_tag} | source: {source_type}")
 

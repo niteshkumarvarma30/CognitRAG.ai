@@ -102,6 +102,16 @@ export default function FAQSection() {
             </details>
           ))}
         </div>
+
+        <div style={{ textAlign: 'center', marginTop: '36px', fontSize: '0.92rem', color: 'var(--mute)' }}>
+          Have more questions, custom security requirements, or need help? Reach out directly at{' '}
+          <a 
+            href="mailto:niteshkumarvarma@cognitrag.com" 
+            style={{ color: 'var(--ind)', fontWeight: 600, textDecoration: 'none' }}
+          >
+            niteshkumarvarma@cognitrag.com
+          </a>
+        </div>
       </div>
     </section>
   );

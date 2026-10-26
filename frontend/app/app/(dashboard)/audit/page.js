@@ -18,7 +18,7 @@ export default function AuditPage() {
 
   const fetchLogs = async () => {
     try {
-      const tid = localStorage.getItem('cognitrag_tenant_id') || '4aedf36c-6bcb-490a-98cc-6293366dd891';
+      const tid = user?.id || (typeof window !== 'undefined' ? localStorage.getItem('cognitrag_tenant_id') : '') || '';
       const apiBase = getApiUrl();
       const res = await fetch(`${apiBase}/api/v1/audit/logs?tenant_id=${tid}`);
       if (res.ok) {

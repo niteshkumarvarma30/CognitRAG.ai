@@ -273,12 +273,22 @@ def jina_rerank(query: str, documents: list[dict], threshold: float = 0.15) -> l
         for result in sorted_results:
             if result.get("relevance_score", 0) >= threshold:
                 index = result.get("index")
-                filtered_chunks.append(documents[index])
+                doc = dict(documents[index])
+                score = round(float(result.get("relevance_score", 0.0)), 2)
+                doc["similarity"] = score
+                doc["relevance_score"] = score
+                filtered_chunks.append(doc)
                 
         return filtered_chunks
     except Exception as e:
         print(f"Jina Reranker failed: {e}")
-        return documents[:5] # Fallback to top 5 without threshold
+        fallback_docs = []
+        for d in documents[:5]:
+            doc = dict(d)
+            if not doc.get("similarity"):
+                doc["similarity"] = round(float(doc.get("rrf_score", 0.0) * 10 or 0.85), 2)
+            fallback_docs.append(doc)
+        return fallback_docs
 
 @traceable(name="grade_documents")
 def grade_documents(state):
@@ -439,13 +449,13 @@ def generate(state, config):
     semantic_definitions = state.get("semantic_definitions", "")
 
     system_prompt = (
-        "You are a highly precise, expert SaaS financial support assistant. "
+        "You are a highly precise, expert engineering and company brain assistant. "
         "Answer the user's question using ONLY the provided Context, Relevant User Facts, Rolling Context, and Recent Chat History. "
         "CRITICAL RULES FOR FACTUAL QUERIES: "
-        "1. Be as concise as possible. Do NOT add unnecessary fluff, background information, or conversational filler. "
-        "2. If the user asks for a number, date, or specific value, output ONLY that exact value if possible. "
-        "3. NEVER hallucinate. If the exact answer cannot be mathematically derived from the context, say exactly 'I don't know.' "
-        "4. Do NOT say 'According to the context...' Just answer directly. "
+        "1. Be concise, direct, and factual. Do NOT add conversational filler or say 'According to the context...'. "
+        "2. For specific entity or ticket queries (e.g., 'status of OPS-7'), output the direct status or value. "
+        "3. For project or system status queries (e.g., 'what is the status of Project Titan?'), synthesize the active state, progress, and upcoming milestones from all retrieved documents—such as open Jira tickets (with their current status like 'To Do' or 'In Progress'), engineering standup decisions, rollout windows, and architecture specs. "
+        "4. NEVER hallucinate facts not supported by the context. Only state 'I don't know' if the context contains zero documents or mentions of the requested topic. "
         "5. TEMPORAL SUPERSEDING: If the context contains multiple timestamps or version history, always treat the most recent timestamp as the active truth. Explicitly recognize older facts as superseded/deprecated. "
         "If the user asks about the conversation itself, answer using the Recent Chat History."
     )

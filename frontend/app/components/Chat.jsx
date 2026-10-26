@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs';
 import { Button, Input, Card, Badge, Skeleton } from '@/components/ui';
 import SourceReceipt from './SourceReceipt';
 import ConfidenceBreakdown from './ConfidenceBreakdown';
+import RazorpayUpgradeModal from './billing/RazorpayUpgradeModal';
 
 import { getApiUrl } from '@/lib/api';
 
@@ -24,6 +25,9 @@ export default function Chat({ tenantId }) {
   const audioChunksRef = useRef([]);
   const [workflowStatus, setWorkflowStatus] = useState('');
   const [activeSource, setActiveSource] = useState(null);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [quotaDetails, setQuotaDetails] = useState(null);
+  const [pendingQuery, setPendingQuery] = useState(null);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -122,6 +126,17 @@ export default function Chat({ tenantId }) {
           chat_history: currentChatHistory
         })
       });
+
+      if (response.status === 402) {
+        const errData = await response.json().catch(() => ({}));
+        const quota = errData.detail || { message: 'Monthly query limit reached for your plan.' };
+        setQuotaDetails(quota);
+        setPendingQuery(text);
+        setUpgradeModalOpen(true);
+        setWorkflowStatus(quota.message || 'Monthly query limit reached. Upgrade to continue.');
+        setIsLoading(false);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error("Network response was not ok");
@@ -472,6 +487,24 @@ export default function Chat({ tenantId }) {
         isOpen={!!activeSource}
         onClose={() => setActiveSource(null)}
         source={activeSource}
+      />
+
+      <RazorpayUpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        tenantId={tenantId}
+        userEmail={user?.primaryEmailAddress?.emailAddress}
+        userName={user?.fullName || user?.firstName}
+        quotaInfo={quotaDetails}
+        onSuccess={(newPlan) => {
+          setUpgradeModalOpen(false);
+          setWorkflowStatus(`Upgraded to ${newPlan.toUpperCase()}! Resuming query...`);
+          if (pendingQuery) {
+            const queryToRetry = pendingQuery;
+            setPendingQuery(null);
+            setTimeout(() => sendChatMessage(queryToRetry), 500);
+          }
+        }}
       />
     </div>
   );

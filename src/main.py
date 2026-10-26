@@ -11,6 +11,7 @@ from src.api.workspace_routes import router as workspace_router
 from src.api.security_routes import router as security_router
 from src.api.billing_routes import router as billing_router
 from src.api.admin_routes import router as admin_router
+from src.api.founder_routes import router as founder_router
 from src.api.bot_routes import router as bot_router
 from src.api.webhooks import router as webhooks_router
 from src.api.audit import router as audit_router
@@ -49,6 +50,7 @@ app.include_router(memory_router)
 app.include_router(ingestion_router)
 app.include_router(integration_router)
 app.include_router(admin_router)
+app.include_router(founder_router)
 app.include_router(bot_router)
 app.include_router(webhooks_router)
 app.include_router(audit_router)

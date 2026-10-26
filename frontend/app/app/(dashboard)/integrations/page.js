@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { MessageSquare, GitPullRequest, CheckSquare, BookOpen } from 'lucide-react';
 import ConnectorCard from '@/components/ConnectorCard';
+import ResourcePickerModal from '@/components/ResourcePickerModal';
 import { getApiUrl } from '@/lib/api';
 
 const V5_CONNECTORS = [
@@ -43,12 +44,29 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('slack') === 'connected') {
+        localStorage.setItem('cognitrag_integration_slack', 'connected');
+      }
+      if (params.get('github') === 'connected' || params.get('status') === 'success') {
+        localStorage.setItem('cognitrag_integration_github', 'connected');
+      }
+    }
     loadStatus();
   }, [user]);
 
+  const getEffectiveTenantId = () => {
+    return user?.id || (typeof window !== 'undefined' ? localStorage.getItem('cognitrag_tenant_id') : '') || '';
+  };
+
   const loadStatus = async () => {
     try {
-      const tid = localStorage.getItem('cognitrag_tenant_id') || '4aedf36c-6bcb-490a-98cc-6293366dd891';
+      const tid = getEffectiveTenantId();
+      if (!tid) {
+        setLoading(false);
+        return;
+      }
       const apiBase = getApiUrl();
       const res = await fetch(`${apiBase}/api/v1/integrations?tenant_id=${tid}`);
       if (res.ok) {
@@ -60,7 +78,7 @@ export default function IntegrationsPage() {
         setTenantIntegrations(mapped);
       }
     } catch (e) {
-      console.warn('Failed to fetch integrations live status, using cached state', e);
+      console.warn('Failed to fetch integrations live status', e);
     } finally {
       setLoading(false);
     }
@@ -70,13 +88,13 @@ export default function IntegrationsPage() {
     const conn = V5_CONNECTORS.find((c) => c.id === providerId);
     if (!conn) return;
 
-    const tid = localStorage.getItem('cognitrag_tenant_id') || '4aedf36c-6bcb-490a-98cc-6293366dd891';
+    const tid = getEffectiveTenantId();
     const apiBase = getApiUrl();
     window.location.href = `${apiBase}${conn.authPath}?tenant_id=${tid}`;
   };
 
   const handleSync = async (providerId) => {
-    const tid = localStorage.getItem('cognitrag_tenant_id') || '4aedf36c-6bcb-490a-98cc-6293366dd891';
+    const tid = getEffectiveTenantId();
     const apiBase = getApiUrl();
     await fetch(`${apiBase}/api/v1/integrations/${providerId}/sync`, {
       method: 'POST',
@@ -86,21 +104,33 @@ export default function IntegrationsPage() {
     await loadStatus();
   };
 
+  const [manageModal, setManageModal] = useState(null);
+
+  const handleManage = (providerId) => {
+    const conn = V5_CONNECTORS.find((c) => c.id === providerId);
+    const status = tenantIntegrations[providerId];
+    setManageModal({
+      provider: providerId,
+      title: conn ? conn.title : providerId,
+      workspaceName: status?.workspace_name || null
+    });
+  };
+
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-100 flex items-center gap-2.5">
+    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '1.5rem', color: '#F8FAFC' }}>
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span>🔌 Workspace Integrations</span>
         </h1>
-        <p className="text-sm text-zinc-400 mt-1">
+        <p style={{ fontSize: '0.9375rem', color: '#94A3B8', marginTop: '6px', maxWidth: '720px', lineHeight: 1.5 }}>
           Connect your organization tools. CognitRAG respects channel memberships, repository access, and project permissions with strict zero-leak isolation.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
         {V5_CONNECTORS.map((c) => {
           const status = tenantIntegrations[c.id];
-          const isConnected = !!status && status.status === 'connected';
+          const isConnected = !!status && (status.status === 'connected' || status.is_active);
 
           return (
             <ConnectorCard
@@ -110,15 +140,29 @@ export default function IntegrationsPage() {
               description={c.description}
               icon={c.icon}
               connected={isConnected}
+              workspaceName={status?.workspace_name}
               syncPhase={status?.sync_phase || 'idle'}
               itemsIndexed={status?.items_indexed || 0}
               lastSyncedAt={status?.last_synced_at || null}
               onConnect={handleConnect}
               onSync={handleSync}
+              onManage={handleManage}
             />
           );
         })}
       </div>
+
+      {manageModal && (
+        <ResourcePickerModal
+          isOpen={!!manageModal}
+          onClose={() => setManageModal(null)}
+          provider={manageModal.provider}
+          title={manageModal.title}
+          tenantId={getEffectiveTenantId()}
+          workspaceName={manageModal.workspaceName}
+          onSyncSuccess={loadStatus}
+        />
+      )}
     </div>
   );
 }

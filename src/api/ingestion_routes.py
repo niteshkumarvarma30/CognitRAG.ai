@@ -21,26 +21,32 @@ class IngestGDriveRequest(BaseModel):
 
 class IngestGithubRequest(BaseModel):
     tenant_id: str
-    repo_names: List[str]
+    repo_names: Optional[List[str]] = None
+    repo_full_name: Optional[str] = None
 
 class IngestNotionRequest(BaseModel):
     tenant_id: str
-    page_ids: List[str]
+    page_ids: Optional[List[str]] = None
+    page_id: Optional[str] = None
+    page_title: Optional[str] = None
 
 class IngestSlackRequest(BaseModel):
     tenant_id: str
-    channel_ids: List[str]
+    channel_ids: Optional[List[str]] = None
+    channel_id: Optional[str] = None
+    channel_name: Optional[str] = None
 
 class IngestJiraRequest(BaseModel):
     tenant_id: str
-    project_keys: List[str]
+    project_keys: Optional[List[str]] = None
+    project_key: Optional[str] = None
 
 def run_gdrive_sync_task(job_id: str, tenant_id: str, file_ids: List[str]):
     try:
         uuid_tenant = get_tenant_uuid(tenant_id)
         admin_db = supabase_manager.get_admin_client()
         admin_db.table("tenants").upsert({"id": uuid_tenant, "name": f"User {tenant_id}"}).execute()
-        db = supabase_manager.get_tenant_client(uuid_tenant)
+        db = admin_db
         
         token_resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "google_drive").execute()
         if not token_resp.data:
@@ -95,7 +101,7 @@ def run_github_sync_task(job_id: str, tenant_id: str, repo_names: List[str]):
         uuid_tenant = get_tenant_uuid(tenant_id)
         admin_db = supabase_manager.get_admin_client()
         admin_db.table("tenants").upsert({"id": uuid_tenant, "name": f"User {tenant_id}"}).execute()
-        db = supabase_manager.get_tenant_client(uuid_tenant)
+        db = admin_db
         
         token_resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "github").execute()
         if not token_resp.data:
@@ -119,8 +125,16 @@ def run_github_sync_task(job_id: str, tenant_id: str, repo_names: List[str]):
             MAX_FILES_PER_REPO = 50  # Protect Bedrock/Titan model rate limits
 
             with zipfile.ZipFile(io.BytesIO(zip_resp.content)) as z:
-                # Prioritized file scanning for documentation, ADRs, and schemas
-                for file_info in z.infolist():
+                # Prioritize architecture, spec, and Titan documents first
+                def file_priority(info):
+                    p_low = info.filename.lower()
+                    if any(k in p_low for k in ['titan', 'architecture', 'spec', 'readme', 'adr', 'decision']):
+                        return 0
+                    return 1
+
+                sorted_files = sorted(z.infolist(), key=file_priority)
+
+                for file_info in sorted_files:
                     if ingested_files_count >= MAX_FILES_PER_REPO:
                         break
 
@@ -172,7 +186,7 @@ def run_notion_sync_task(job_id: str, tenant_id: str, page_ids: List[str]):
         uuid_tenant = get_tenant_uuid(tenant_id)
         admin_db = supabase_manager.get_admin_client()
         admin_db.table("tenants").upsert({"id": uuid_tenant, "name": f"User {tenant_id}"}).execute()
-        db = supabase_manager.get_tenant_client(uuid_tenant)
+        db = admin_db
         
         token_resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "notion").execute()
         if not token_resp.data:
@@ -195,13 +209,32 @@ def run_notion_sync_task(job_id: str, tenant_id: str, page_ids: List[str]):
             blocks_res = requests.get(f"https://api.notion.com/v1/blocks/{page_id}/children", headers=headers)
             blocks = blocks_res.json().get("results", []) if blocks_res.status_code == 200 else []
             
-            page_text = f"# Notion Document {page_id}\n\n"
+            page_meta_res = requests.get(f"https://api.notion.com/v1/pages/{page_id}", headers=headers)
+            page_title = "Notion Document"
+            if page_meta_res.status_code == 200:
+                props = page_meta_res.json().get("properties", {})
+                for p_key, p_val in props.items():
+                    if p_val.get("type") == "title" and p_val.get("title"):
+                        extracted_title = "".join(t.get("plain_text", "") for t in p_val.get("title", []))
+                        if extracted_title.strip():
+                            page_title = extracted_title.strip()
+                        break
+
+            page_text = f"# {page_title}\n\n"
             for b in blocks:
                 b_type = b.get("type", "")
                 if b_type in b and "rich_text" in b[b_type]:
-                    for rt in b[b_type]["rich_text"]:
-                        page_text += rt.get("plain_text", "")
-                    page_text += "\n\n"
+                    block_content = "".join(rt.get("plain_text", "") for rt in b[b_type]["rich_text"])
+                    if not block_content.strip():
+                        continue
+                    if b_type == "heading_1":
+                        page_text += f"## {block_content}\n\n"
+                    elif b_type == "heading_2":
+                        page_text += f"### {block_content}\n\n"
+                    elif b_type == "bulleted_list_item":
+                        page_text += f"- {block_content}\n\n"
+                    else:
+                        page_text += f"{block_content}\n\n"
                     
             doc_res = db.table("documents").insert({
                 "tenant_id": uuid_tenant,
@@ -212,7 +245,7 @@ def run_notion_sync_task(job_id: str, tenant_id: str, page_ids: List[str]):
             if doc_res.data:
                 doc_id = doc_res.data[0]["id"]
                 chunks = chunk_text(page_text)
-                run_ingestion_pipeline(uuid_tenant, doc_id, chunks)
+                run_ingestion_pipeline(uuid_tenant, doc_id, chunks, source_type="notion", author="Notion Workspace")
                 db.table("documents").update({"status": "completed"}).eq("id", doc_id).execute()
                 
         ingestion_jobs[job_id]["status"] = "completed"
@@ -226,7 +259,7 @@ def run_slack_sync_task(job_id: str, tenant_id: str, channel_ids: List[str]):
         uuid_tenant = get_tenant_uuid(tenant_id)
         admin_db = supabase_manager.get_admin_client()
         admin_db.table("tenants").upsert({"id": uuid_tenant, "name": f"User {tenant_id}"}).execute()
-        db = supabase_manager.get_tenant_client(uuid_tenant)
+        db = admin_db
         
         token_resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "slack").execute()
         if not token_resp.data:
@@ -240,27 +273,45 @@ def run_slack_sync_task(job_id: str, tenant_id: str, channel_ids: List[str]):
         ingestion_jobs[job_id]["status"] = "processing"
         
         for idx, ch_id in enumerate(channel_ids, 1):
-            ingestion_jobs[job_id]["progress"] = f"Fetching messages from Slack channel {ch_id} ({idx}/{len(channel_ids)})..."
+            info_res = requests.get("https://slack.com/api/conversations.info", headers=headers, params={"channel": ch_id})
+            ch_name = ch_id
+            if info_res.status_code == 200 and info_res.json().get("ok"):
+                ch_name = info_res.json().get("channel", {}).get("name", ch_id)
+
+            ingestion_jobs[job_id]["progress"] = f"Fetching messages from #{ch_name} ({idx}/{len(channel_ids)})..."
             
             hist_res = requests.get("https://slack.com/api/conversations.history", headers=headers, params={"channel": ch_id, "limit": 100})
             msgs = hist_res.json().get("messages", []) if hist_res.status_code == 200 and hist_res.json().get("ok") else []
             
-            ch_text = f"# Slack Channel {ch_id}\n\n"
+            ch_text = f"# Slack Channel #{ch_name}\n\n"
             for m in reversed(msgs):
                 user = m.get("user", "User")
                 text = m.get("text", "")
+                if not text.strip():
+                    continue
                 ch_text += f"- **{user}**: {text}\n"
+                
+                # Fetch thread replies if thread exists
+                if m.get("reply_count", 0) > 0 and m.get("ts"):
+                    rep_res = requests.get("https://slack.com/api/conversations.replies", headers=headers, params={"channel": ch_id, "ts": m["ts"]})
+                    if rep_res.status_code == 200 and rep_res.json().get("ok"):
+                        for rep in rep_res.json().get("messages", [])[1:]:
+                            r_user = rep.get("user", "User")
+                            r_text = rep.get("text", "")
+                            if r_text.strip():
+                                ch_text += f"  - [Thread Reply by {r_user}]: {r_text}\n"
+                ch_text += "\n"
                 
             doc_res = db.table("documents").insert({
                 "tenant_id": uuid_tenant,
-                "filename": f"slack/channel_{ch_id}.md",
+                "filename": f"slack/{ch_name}.md",
                 "status": "pending"
             }).execute()
             
             if doc_res.data:
                 doc_id = doc_res.data[0]["id"]
                 chunks = chunk_text(ch_text)
-                run_ingestion_pipeline(uuid_tenant, doc_id, chunks)
+                run_ingestion_pipeline(uuid_tenant, doc_id, chunks, source_type="slack", author=f"#{ch_name}")
                 db.table("documents").update({"status": "completed"}).eq("id", doc_id).execute()
                 
         ingestion_jobs[job_id]["status"] = "completed"
@@ -269,12 +320,37 @@ def run_slack_sync_task(job_id: str, tenant_id: str, channel_ids: List[str]):
         ingestion_jobs[job_id]["status"] = "failed"
         ingestion_jobs[job_id]["error"] = str(e)
 
+def extract_jira_adf_text(node):
+    if not node:
+        return ""
+    if isinstance(node, str):
+        return node
+    if isinstance(node, list):
+        return "\n".join([extract_jira_adf_text(item) for item in node if item]).strip()
+    if isinstance(node, dict):
+        t = node.get("text", "")
+        node_type = node.get("type", "")
+        if "content" in node:
+            inner = extract_jira_adf_text(node["content"])
+            if t:
+                t = f"{t} {inner}"
+            else:
+                t = inner
+        if node_type == "listItem":
+            return f"- {t}"
+        elif node_type.startswith("heading"):
+            return f"\n### {t}\n"
+        elif node_type == "paragraph":
+            return f"{t}\n"
+        return t
+    return ""
+
 def run_jira_sync_task(job_id: str, tenant_id: str, project_keys: List[str]):
     try:
         uuid_tenant = get_tenant_uuid(tenant_id)
         admin_db = supabase_manager.get_admin_client()
         admin_db.table("tenants").upsert({"id": uuid_tenant, "name": f"User {tenant_id}"}).execute()
-        db = supabase_manager.get_tenant_client(uuid_tenant)
+        db = admin_db
         
         token_resp = admin_db.table("tenant_integrations").select("access_token").eq("tenant_id", uuid_tenant).eq("integration_type", "jira").execute()
         if not token_resp.data:
@@ -283,7 +359,7 @@ def run_jira_sync_task(job_id: str, tenant_id: str, project_keys: List[str]):
             return
             
         token = token_resp.data[0]["access_token"]
-        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json"}
         
         res_resp = requests.get("https://api.atlassian.com/oauth/token/accessible-resources", headers=headers)
         if res_resp.status_code != 200 or not res_resp.json():
@@ -298,9 +374,13 @@ def run_jira_sync_task(job_id: str, tenant_id: str, project_keys: List[str]):
             ingestion_jobs[job_id]["progress"] = f"Fetching issues from Jira project {key} ({idx}/{len(project_keys)})..."
             
             s_res = requests.post(
-                f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search",
+                f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search/jql",
                 headers=headers,
-                json={"jql": f"project = '{key}' ORDER BY updated DESC", "maxResults": 50}
+                json={
+                    "jql": f"project = '{key}' ORDER BY updated DESC",
+                    "maxResults": 50,
+                    "fields": ["summary", "status", "description", "assignee", "priority"]
+                }
             )
             
             issues = s_res.json().get("issues", []) if s_res.status_code == 200 else []
@@ -310,7 +390,16 @@ def run_jira_sync_task(job_id: str, tenant_id: str, project_keys: List[str]):
                 f = iss.get("fields", {})
                 summary = f.get("summary", "No Summary")
                 status = f.get("status", {}).get("name", "Open")
-                jira_text += f"## [{iss.get('key')}] {summary}\n- Status: {status}\n\n"
+                assignee = f.get("assignee", {}).get("displayName", "Unassigned") if f.get("assignee") else "Unassigned"
+                priority = f.get("priority", {}).get("name", "Normal") if f.get("priority") else "Normal"
+                desc = extract_jira_adf_text(f.get("description"))
+                
+                jira_text += f"## [{iss.get('key')}] {summary}\n"
+                jira_text += f"- **Status**: {status}\n"
+                jira_text += f"- **Assignee**: {assignee}\n"
+                jira_text += f"- **Priority**: {priority}\n\n"
+                if desc:
+                    jira_text += f"### Details & Acceptance Criteria\n{desc}\n\n"
                 
             doc_res = db.table("documents").insert({
                 "tenant_id": uuid_tenant,
@@ -321,7 +410,13 @@ def run_jira_sync_task(job_id: str, tenant_id: str, project_keys: List[str]):
             if doc_res.data:
                 doc_id = doc_res.data[0]["id"]
                 chunks = chunk_text(jira_text)
-                run_ingestion_pipeline(uuid_tenant, doc_id, chunks)
+                run_ingestion_pipeline(
+                    uuid_tenant,
+                    doc_id,
+                    chunks,
+                    source_type="jira",
+                    author="Jira Sync"
+                )
                 db.table("documents").update({"status": "completed"}).eq("id", doc_id).execute()
                 
         ingestion_jobs[job_id]["status"] = "completed"
@@ -343,47 +438,52 @@ def ingest_gdrive(req: IngestGDriveRequest, background_tasks: BackgroundTasks):
 
 @router.post("/api/v1/ingest/github")
 def ingest_github(req: IngestGithubRequest, background_tasks: BackgroundTasks):
+    repos = req.repo_names or ([req.repo_full_name] if req.repo_full_name else [])
     job_id = str(uuid.uuid4())
     ingestion_jobs[job_id] = {
         "status": "pending",
         "progress": "Queued for processing...",
-        "total": len(req.repo_names)
+        "total": len(repos)
     }
-    background_tasks.add_task(run_github_sync_task, job_id, req.tenant_id, req.repo_names)
-    return {"job_id": job_id, "status": "queued"}
+    background_tasks.add_task(run_github_sync_task, job_id, req.tenant_id, repos)
+    return {"job_id": job_id, "status": "queued", "message": f"Successfully queued {len(repos)} GitHub repositories for ingestion."}
 
 @router.post("/api/v1/ingest/notion")
 def ingest_notion(req: IngestNotionRequest, background_tasks: BackgroundTasks):
+    pages = req.page_ids or ([req.page_id] if req.page_id else [])
     job_id = str(uuid.uuid4())
     ingestion_jobs[job_id] = {
         "status": "pending",
         "progress": "Queued for processing...",
-        "total": len(req.page_ids)
+        "total": len(pages)
     }
-    background_tasks.add_task(run_notion_sync_task, job_id, req.tenant_id, req.page_ids)
-    return {"job_id": job_id, "status": "queued"}
+    background_tasks.add_task(run_notion_sync_task, job_id, req.tenant_id, pages)
+    return {"job_id": job_id, "status": "queued", "message": f"Successfully queued {len(pages)} Notion pages for ingestion."}
 
 @router.post("/api/v1/ingest/slack")
 def ingest_slack(req: IngestSlackRequest, background_tasks: BackgroundTasks):
+    channels = req.channel_ids or ([req.channel_id] if req.channel_id else [])
+    channel_display = req.channel_name or (channels[0] if channels else "channels")
     job_id = str(uuid.uuid4())
     ingestion_jobs[job_id] = {
         "status": "pending",
         "progress": "Queued for processing...",
-        "total": len(req.channel_ids)
+        "total": len(channels)
     }
-    background_tasks.add_task(run_slack_sync_task, job_id, req.tenant_id, req.channel_ids)
-    return {"job_id": job_id, "status": "queued"}
+    background_tasks.add_task(run_slack_sync_task, job_id, req.tenant_id, channels)
+    return {"job_id": job_id, "status": "queued", "message": f"Successfully queued {channel_display} for ingestion."}
 
 @router.post("/api/v1/ingest/jira")
 def ingest_jira(req: IngestJiraRequest, background_tasks: BackgroundTasks):
+    projects = req.project_keys or ([req.project_key] if req.project_key else [])
     job_id = str(uuid.uuid4())
     ingestion_jobs[job_id] = {
         "status": "pending",
         "progress": "Queued for processing...",
-        "total": len(req.project_keys)
+        "total": len(projects)
     }
-    background_tasks.add_task(run_jira_sync_task, job_id, req.tenant_id, req.project_keys)
-    return {"job_id": job_id, "status": "queued"}
+    background_tasks.add_task(run_jira_sync_task, job_id, req.tenant_id, projects)
+    return {"job_id": job_id, "status": "queued", "message": f"Successfully queued {len(projects)} Jira projects for ingestion."}
 
 @router.get("/api/v1/ingest/status/{job_id}")
 def get_ingest_status(job_id: str):

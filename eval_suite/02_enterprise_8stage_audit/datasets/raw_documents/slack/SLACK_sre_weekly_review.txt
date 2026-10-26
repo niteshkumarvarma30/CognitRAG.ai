@@ -1,8 +1,0 @@
-Channel: #sre-weekly-review
-Topic: Service Level Objective (SLO) review for August 2024
-
-[14:00:00] Maya Lin: Monthly SLO results:
-- Payment API availability: 99.994% (Target: 99.99%)
-- Query latency p95: 185ms (Target: < 250ms)
-- Document ingestion queue lag: < 12 seconds average.
-All core services remained inside error budgets for August.

@@ -23,38 +23,41 @@
   --surface-dark:       #080B14;
   --surface-dark-hover: #1E293B;
 
-  /* ── Typography Colors (Deep Charcoal & Warm Slate) ── */
-  --text-primary:       #18181B;
-  --text-secondary:     #52525B;
-  --text-muted:         #A1A1AA;
+  /* ── Typography Colors (High-Contrast Slate on Dark) ── */
+  --text-primary:       #F8FAFC;
+  --text-secondary:     #94A3B8;
+  --text-muted:         #64748B;
   --text-on-dark:       #F8FAFC;
-  --text-on-dark-muted: #A1A1AA;
+  --text-on-dark-muted: #94A3B8;
 
-  /* ── Borders (Warm Hairline) ── */
-  --border:             #EAE8E3;
-  --border-strong:      #D4D4D8;
-  --border-focus:       #EA580C;
-  --border-dark:        #3F3F46;
+  /* ── Borders (Subtle Glass & High-Resolution Hairlines) ── */
+  --border:             rgba(255, 255, 255, 0.08);
+  --border-strong:      rgba(255, 255, 255, 0.16);
+  --border-light:       rgba(255, 255, 255, 0.05);
+  --border-focus:       #6366F1;
+  --border-dark:        rgba(255, 255, 255, 0.04);
 
-  /* ── Brand Accents (Warm Amber & Electric Indigo) ── */
-  --primary:            #EA580C;
-  --primary-hover:      #C2410C;
-  --primary-light:      rgba(234, 88, 12, 0.08);
-  --primary-glow:       rgba(234, 88, 12, 0.20);
+  /* ── Brand Accents (CognitRAG Electric Indigo & Violet) ── */
+  --primary:            #6366F1;
+  --primary-hover:      #4F46E5;
+  --primary-light:      rgba(99, 102, 241, 0.12);
+  --primary-glow:       rgba(99, 102, 241, 0.28);
+  --accent:             #818CF8;
+  --accent-glow:        rgba(129, 140, 248, 0.35);
   --violet:             #7C3AED;
-  --violet-light:       rgba(124, 58, 237, 0.08);
+  --violet-light:       rgba(124, 58, 237, 0.12);
   --indigo:             #4F46E5;
   --coral:              #F43F5E;
 
   /* ── Semantic Feedback ── */
   --success:            #10B981;
-  --success-light:      rgba(16, 185, 129, 0.08);
+  --success-light:      rgba(16, 185, 129, 0.12);
   --warning:            #F59E0B;
-  --warning-light:      rgba(245, 158, 11, 0.08);
+  --warning-light:      rgba(245, 158, 11, 0.12);
   --error:              #EF4444;
-  --error-light:        rgba(239, 68, 68, 0.08);
-  --info:               #3B82F6;
-  --info-light:         rgba(59, 130, 246, 0.08);
+  --error-light:        rgba(239, 68, 68, 0.12);
+  --info:               #38BDF8;
+  --info-light:         rgba(56, 189, 248, 0.12);
 
   /* ── Spacing (4px grid) ── */
   --space-1:  4px;
@@ -189,6 +192,40 @@ body {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
+}
+
+/* ── Global Form & Button Defaults (Prevent raw browser buttonface) ── */
+button {
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--duration-fast) ease;
+  background: var(--surface-soft);
+  color: var(--text-primary);
+}
+
+button:hover {
+  background: var(--surface-dark-hover);
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: 0.875rem;
+  background: var(--surface-dark);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color var(--duration-fast) ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
 /* ============================================================

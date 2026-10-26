@@ -1,4 +1,4 @@
-﻿fastapi
+fastapi
 uvicorn
 supabase
 neo4j
@@ -15,4 +15,16 @@ stripe>=10.0.0
 litellm
 instructor
 langgraph
+slack-bolt>=1.18.0
+langdetect>=1.0.9
+google-auth
+requests
+pyyaml
+httpx
+langsmith
+pypdf2
 google-generativeai
+google-cloud-aiplatform
+redis
+boto3
+razorpay>=1.4.1

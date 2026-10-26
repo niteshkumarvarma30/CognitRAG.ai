@@ -19,3 +19,8 @@ cognitrag-key.pem
 *.pyc
 *.swp
 credentials/
+
+env.cloudrun.yaml
+scratch_gen_env.py
+.gemini/
+eval_results/

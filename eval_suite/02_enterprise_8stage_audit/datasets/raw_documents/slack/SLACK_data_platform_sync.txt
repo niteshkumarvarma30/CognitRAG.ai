@@ -1,6 +1,0 @@
-Channel: #data-platform-sync
-Topic: Weekly sync on Delta Lake 3.2 and Spark 3.5 engine performance
-
-[11:00:00] Priya Patel: Morning team. With PR #4493 merged, our skewed partition joins are running smoothly. Next focus is Parquet decimal reader stability.
-[11:03:15] Chen Wei: PR #4330 fixed the Decimal(38, 18) off-heap buffer overflow in `VectorizedColumnReader.java`. Backported to all 3.5.2 images.
-[11:06:00] Liam Zhao: We can now enable vectorized reading globally in production `spark-defaults.conf`.

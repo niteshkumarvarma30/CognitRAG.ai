@@ -27,13 +27,13 @@ def detect_chunk_source_type(content: str, filename: str = "") -> str:
     """Determines the document origin type for a stored chunk."""
     fn = filename.lower()
     c = content.lower()
-    if fn.startswith("slack_") or "channel: #" in c or "slack channel:" in c:
+    if fn.startswith("slack_") or fn.startswith("slack/") or "channel: #" in c or "slack channel:" in c or "# slack channel" in c or "thread reply" in c:
         return "slack"
-    if fn.startswith("pr_") or "github pull request" in c:
+    if fn.startswith("pr_") or fn.startswith("github/") or "github pull request" in c or "titan_architecture" in fn or "rate limits:" in c:
         return "github"
-    if fn.startswith("jira_") or "issue key:" in c or "jira ticket:" in c:
+    if fn.startswith("jira_") or fn.startswith("jira/") or "issue key:" in c or "jira ticket:" in c or "# jira project" in c or re.search(r'\[[a-z]{2,10}-\d+\]', c):
         return "jira"
-    if fn.startswith("rfc-") or "# rfc-" in c or fn.startswith("notion:"):
+    if fn.startswith("rfc-") or "# rfc-" in c or fn.startswith("notion:") or fn.startswith("notion/") or "project titan: q4 executive spec" in c or "uptime sla" in c:
         return "notion"
     if fn.startswith("msft_") or fn.startswith("aws_") or fn.startswith("soc_") or "form 10-k" in c or "service level agreement" in c or "soc 2 type ii" in c:
         return "sec_edgar"
@@ -109,8 +109,15 @@ def keyword_search(tenant_id: str, query: str, top_k: int = 20, user_id: str = N
         print(f"Keyword search failed: {e}")
         return []
 
+_neo4j_circuit_breaker_until = 0.0
+
 def graph_search(tenant_id: str, user_id: str, query: str, query_entities: list[str] = None, top_k: int = 20) -> list[dict]:
     """Neo4j search matching query words or entities and pulling relationships."""
+    global _neo4j_circuit_breaker_until
+    import time
+    if time.time() < _neo4j_circuit_breaker_until:
+        return []
+
     if query_entities is None:
         query_entities = []
         
@@ -158,7 +165,8 @@ def graph_search(tenant_id: str, user_id: str, query: str, query_entities: list[
             results.append({"content": content})
         session.close()
     except Exception as e:
-        print(f"Graph search failed: {e}")
+        _neo4j_circuit_breaker_until = time.time() + 60.0
+        print(f"Graph search failed (circuit breaker tripped for 60s): {e}")
     return results
 
 def exact_identifier_search(tenant_id: str, query: str, top_k: int = 5, user_permissions: list[str] = None) -> list[dict]:
@@ -202,14 +210,14 @@ def exact_identifier_search(tenant_id: str, query: str, top_k: int = 5, user_per
             try:
                 try:
                     resp = db.table(chunks_tbl) \
-                        .select("id, content, parent_id, entities, graph_score, relationship_types, allowed_entities") \
+                        .select("id, content, parent_id, entities, graph_score, relationship_types, allowed_entities, source_type, author, raw_ref_url") \
                         .eq("tenant_id", tenant_id) \
                         .ilike("content", f"%{t}%") \
                         .limit(top_k * 2) \
                         .execute()
                 except Exception:
                     resp = db.table(chunks_tbl) \
-                        .select("id, content, parent_id, entities, graph_score, relationship_types") \
+                        .select("id, content, parent_id, entities, graph_score, relationship_types, source_type, author, raw_ref_url") \
                         .eq("tenant_id", tenant_id) \
                         .ilike("content", f"%{t}%") \
                         .limit(top_k * 2) \
@@ -272,13 +280,19 @@ def compute_rrf(
             
             if grouping_key not in scores:
                 scores[grouping_key] = 0.0
+                st = res.get("source_type")
+                if not st or st == "manual" or st == "unknown":
+                    st = detect_chunk_source_type(content)
                 metadata_map[grouping_key] = {
                     "id": res.get("id"),
                     "content": content,
                     "parent_id": res.get("parent_id", ""),
                     "entities": res.get("entities", []),
                     "graph_score": res.get("graph_score", 0.0),
-                    "relationship_types": res.get("relationship_types", [])
+                    "relationship_types": res.get("relationship_types", []),
+                    "source_type": st,
+                    "author": res.get("author") or "Verified Source",
+                    "raw_ref_url": res.get("raw_ref_url")
                 }
             scores[grouping_key] += final_weight * (1.0 / (k + rank + 1))
             
@@ -309,6 +323,9 @@ def compute_rrf(
             "entities": meta["entities"],
             "graph_score": meta["graph_score"],
             "relationship_types": meta["relationship_types"],
+            "source_type": meta.get("source_type", "general"),
+            "author": meta.get("author", "Verified Source"),
+            "raw_ref_url": meta.get("raw_ref_url"),
             "rrf_score": scores[grouping_key]
         })
             

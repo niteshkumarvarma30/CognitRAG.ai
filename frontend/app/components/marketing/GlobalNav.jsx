@@ -10,7 +10,8 @@ export default function GlobalNav({ onOpenEarlyAccess }) {
     { label: 'Demo', href: '#demo' },
     { label: 'Connections', href: '#connections' },
     { label: 'Privacy', href: '#privacy' },
-    { label: 'Plans', href: '#plans' }
+    { label: 'Plans', href: '#plans' },
+    { label: 'Contact', href: 'mailto:niteshkumarvarma@cognitrag.com' }
   ];
 
   return (
@@ -86,25 +87,46 @@ export default function GlobalNav({ onOpenEarlyAccess }) {
         </nav>
 
         {/* CTA and Mobile toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            onClick={onOpenEarlyAccess}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Link
+            href="/sign-in"
+            style={{
+              color: 'var(--ink)',
+              textDecoration: 'none',
+              padding: '6px 12px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              borderRadius: '6px',
+              border: '1px solid var(--line)',
+              backgroundColor: 'transparent',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => { e.target.style.borderColor = 'var(--ind)'; e.target.style.color = 'var(--ind)'; }}
+            onMouseLeave={(e) => { e.target.style.borderColor = 'var(--line)'; e.target.style.color = 'var(--ink)'; }}
+          >
+            Sign In
+          </Link>
+
+          <Link
+            href="/sign-up?plan=teams"
             style={{
               backgroundColor: 'var(--ind)',
               color: '#FFFFFF',
-              border: 'none',
+              textDecoration: 'none',
               borderRadius: '6px',
               padding: '7px 14px',
               fontSize: '0.85rem',
               fontWeight: 600,
-              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
               transition: 'opacity 0.15s ease'
             }}
             onMouseEnter={(e) => (e.target.style.opacity = '0.9')}
             onMouseLeave={(e) => (e.target.style.opacity = '1')}
           >
-            Get early access
-          </button>
+            Start Free Trial
+          </Link>
 
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
@@ -151,6 +173,37 @@ export default function GlobalNav({ onOpenEarlyAccess }) {
               {link.label}
             </a>
           ))}
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Link
+              href="/sign-up?plan=teams"
+              onClick={() => setMobileOpen(false)}
+              style={{
+                padding: '8px 12px', background: 'var(--ind)', color: '#fff',
+                borderRadius: '6px', textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem', textAlign: 'center'
+              }}
+            >
+              Start Teams Trial ($99)
+            </Link>
+            <Link
+              href="/sign-up?plan=solo"
+              onClick={() => setMobileOpen(false)}
+              style={{
+                padding: '8px 12px', background: 'transparent', border: '1px solid var(--line)', color: 'var(--ink)',
+                borderRadius: '6px', textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem', textAlign: 'center'
+              }}
+            >
+              Start Solo Trial ($29)
+            </Link>
+            <Link
+              href="/sign-in"
+              onClick={() => setMobileOpen(false)}
+              style={{
+                color: 'var(--mute)', textDecoration: 'none', fontSize: '0.85rem', textAlign: 'center', paddingTop: '4px'
+              }}
+            >
+              Already have an account? <span style={{ color: 'var(--ind)', fontWeight: 600 }}>Sign In &rarr;</span>
+            </Link>
+          </div>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { Card, Button, Badge } from '@/components/ui';
 import { FileText, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 import { getApiUrl } from '@/lib/api';
+import LanguageTagBadge from '@/components/LanguageTagBadge';
 
 export default function KnowledgeGovernancePage() {
   const { user, isLoaded } = useUser();
@@ -19,7 +20,11 @@ export default function KnowledgeGovernancePage() {
     if (showLoading) setLoading(true);
     const baseUrl = getApiBase();
     try {
-      const primaryId = user?.id || 'ws_dev_primary';
+      const primaryId = user?.id || (typeof window !== 'undefined' ? localStorage.getItem('cognitrag_tenant_id') : '') || '';
+      if (!primaryId) {
+        setDocuments([]);
+        return;
+      }
       const res = await fetch(`${baseUrl}/api/v1/documents/${primaryId}`);
       if (res.ok) {
         const data = await res.json();
@@ -45,7 +50,8 @@ export default function KnowledgeGovernancePage() {
     setDeletingId(doc.id);
     const baseUrl = getApiBase();
     try {
-      const primaryId = user?.id || 'ws_dev_primary';
+      const primaryId = user?.id || (typeof window !== 'undefined' ? localStorage.getItem('cognitrag_tenant_id') : '') || '';
+      if (!primaryId) return;
       const res = await fetch(`${baseUrl}/api/v1/documents/${primaryId}/${doc.id}`, {
         method: 'DELETE'
       });
@@ -183,11 +189,28 @@ export default function KnowledgeGovernancePage() {
                           <Loader2 size={12} className="animate-spin" /> INGESTING...
                         </Badge>
                       )}
+                      {doc.source_type && (
+                        <span style={{
+                          fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px',
+                          background: 'rgba(255,255,255,0.06)', color: '#94a3b8',
+                          textTransform: 'uppercase', fontWeight: 600
+                        }}>
+                          {doc.source_type}
+                        </span>
+                      )}
+                      {doc.language_tag && (
+                        <LanguageTagBadge tag={doc.language_tag} size="sm" />
+                      )}
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Uploaded on {new Date(doc.created_at).toLocaleDateString()}</span>
                     </div>
                     <p style={{ fontSize: '0.9375rem', color: 'var(--text-primary)', fontWeight: 600 }}>
                       {doc.filename}
                     </p>
+                    {doc.raw_ref_url && (
+                      <a href={doc.raw_ref_url} target="_blank" rel="noreferrer" style={{ fontSize: '0.75rem', color: '#38bdf8', textDecoration: 'none', display: 'inline-block', marginTop: '4px' }}>
+                        Source Link →
+                      </a>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--space-2)', marginLeft: 'var(--space-6)' }}>
                     <Button 

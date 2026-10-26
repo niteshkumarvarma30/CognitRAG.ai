@@ -20,6 +20,7 @@ export default function PricingSection({ onOpenEarlyAccess }) {
       ],
       ctaText: 'Start Solo Trial',
       href: '/sign-up?plan=solo',
+      signInHref: '/sign-in?plan=solo',
       isPrimary: false
     },
     {
@@ -38,6 +39,7 @@ export default function PricingSection({ onOpenEarlyAccess }) {
       ],
       ctaText: 'Start Teams Trial',
       href: '/sign-up?plan=teams',
+      signInHref: '/sign-in?plan=teams',
       isPrimary: true
     },
     {
@@ -56,6 +58,7 @@ export default function PricingSection({ onOpenEarlyAccess }) {
       ],
       ctaText: 'Contact for Demo',
       href: null,
+      signInHref: '/sign-in?plan=enterprise',
       isPrimary: false,
       isContact: true
     }
@@ -175,37 +178,61 @@ export default function PricingSection({ onOpenEarlyAccess }) {
                 ))}
               </div>
 
-              <button
-                onClick={() => {
-                  if (plan.href) {
-                    window.location.href = plan.href;
-                  } else {
-                    onOpenEarlyAccess();
-                  }
-                }}
-                style={{
-                  backgroundColor: plan.isPrimary ? 'var(--ind)' : 'transparent',
-                  color: plan.isPrimary ? '#FFFFFF' : 'var(--ink)',
-                  border: plan.isPrimary ? 'none' : '1px solid var(--line)',
-                  borderRadius: '8px',
-                  padding: '12px 18px',
-                  fontSize: '0.92rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  transition: 'opacity 0.15s ease'
-                }}
-                onMouseEnter={(e) => (e.target.style.opacity = '0.9')}
-                onMouseLeave={(e) => (e.target.style.opacity = '1')}
-              >
-                {plan.ctaText}
-                <ArrowRight size={16} />
-              </button>
+              {/* Sleek Action Button: Sign Up / Log In */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto' }}>
+                <button
+                  onClick={() => {
+                    if (plan.href) {
+                      window.location.href = plan.href;
+                    } else {
+                      onOpenEarlyAccess();
+                    }
+                  }}
+                  style={{
+                    backgroundColor: plan.isPrimary ? 'var(--ind)' : 'var(--bg2)',
+                    color: plan.isPrimary ? '#FFFFFF' : 'var(--ink)',
+                    border: plan.isPrimary ? 'none' : '1px solid var(--line)',
+                    borderRadius: '8px',
+                    padding: '12px 18px',
+                    fontSize: '0.92rem',
+                    fontWeight: 650,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: plan.isPrimary ? '0 4px 16px rgba(129, 140, 248, 0.25)' : 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = '0.9';
+                    if (!plan.isPrimary) {
+                      e.currentTarget.style.borderColor = 'var(--ind)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = '1';
+                    if (!plan.isPrimary) {
+                      e.currentTarget.style.borderColor = 'var(--line)';
+                    }
+                  }}
+                >
+                  {plan.isContact ? 'Contact for Demo' : 'Sign Up / Log In'}
+                  <ArrowRight size={16} />
+                </button>
+              </div>
             </div>
           ))}
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '36px', fontSize: '0.92rem', color: 'var(--mute)' }}>
+          Need a custom quote, annual invoice, or have enterprise queries? Email our team at{' '}
+          <a 
+            href="mailto:niteshkumarvarma@cognitrag.com" 
+            style={{ color: 'var(--ind)', fontWeight: 600, textDecoration: 'none' }}
+          >
+            niteshkumarvarma@cognitrag.com
+          </a>
         </div>
       </div>
     </section>

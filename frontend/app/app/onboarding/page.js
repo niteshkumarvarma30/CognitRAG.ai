@@ -1,216 +1,214 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, Button, Input } from '@/components/ui';
-import { Briefcase, Link as LinkIcon, ShieldCheck, Zap, Bot, ArrowRight, Loader2, MessageSquare, GitBranch, FileText } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle2, ArrowRight, GitBranch, Database, FileText, Sparkles, ExternalLink, MessageSquare } from 'lucide-react';
+import Link from 'next/link';
+import { getApiUrl } from '@/lib/api';
 
 export default function OnboardingPage() {
-  const router = useRouter();
-
-  // Deprecate legacy onboarding: redirect directly to the persona's dedicated dashboard
-  useEffect(() => {
-    const storedPersona = typeof window !== 'undefined' ? localStorage.getItem('cognitrag_persona') : null;
-    if (storedPersona === 'company_brain' || storedPersona === 'enterprise_brain') {
-      router.replace('/enterprise-brain');
-    } else if (storedPersona === 'bharat_intelligence') {
-      router.replace('/bharat-intelligence');
-    } else {
-      router.replace('/dev-studio');
-    }
-  }, [router]);
-
   const [step, setStep] = useState(1);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [slackConnected, setSlackConnected] = useState(false);
+  const [connectedSources, setConnectedSources] = useState({
+    github: false,
+    jira: false,
+    notion: false,
+    drive: false
+  });
 
-  // Form State
-  const [workspaceName, setWorkspaceName] = useState('');
-  const [connectedSources, setConnectedSources] = useState([]);
-  
-  const handleNext = async () => {
-    if (step === 1 && !workspaceName.trim()) return;
-    
-    if (step === 4) {
-      // Simulate Finalization
-      setIsProcessing(true);
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 1500);
-      return;
-    }
-
-    if (step === 2) {
-        setIsProcessing(true);
-        setTimeout(() => {
-            setIsProcessing(false);
-            setStep(s => s + 1);
-        }, 1200); // simulate oauth connection
-        return;
-    }
-    
-    setStep(s => s + 1);
+  const toggleSource = (source) => {
+    setConnectedSources(prev => ({ ...prev, [source]: !prev[source] }));
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', background: 'var(--bg)', padding: 'var(--space-8)' }}>
-      
-      {/* Progress Sidebar */}
-      <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
-        <div>
-          <div style={{ width: 40, height: 40, background: 'var(--primary)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', marginBottom: 'var(--space-4)' }}>
-            <Bot size={24} />
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      background: 'var(--bg, #090d16)',
+      padding: '24px',
+      color: '#f8fafc'
+    }}>
+      <div style={{ maxWidth: '580px', width: '100%' }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '9999px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.25)', marginBottom: '16px' }}>
+            <Sparkles size={14} style={{ color: '#38bdf8' }} />
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#38bdf8' }}>Step {step} of 3</span>
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>Welcome to CognitRAG</h1>
-          <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)' }}>Let's set up your company's intelligence platform in minutes.</p>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, marginBottom: '8px' }}>
+            {step === 1 && 'Install CognitRAG in Slack'}
+            {step === 2 && 'Connect Your Data Sources'}
+            {step === 3 && "You're All Set!"}
+          </h1>
+          <p style={{ color: '#94a3b8', fontSize: '0.9375rem' }}>
+            {step === 1 && 'Your team talks in Slack — install the bot so anyone can ask questions.'}
+            {step === 2 && 'CognitRAG indexes your documents and cross-links code, tickets, and docs.'}
+            {step === 3 && 'Your company brain is ready to answer questions with claim-level proof.'}
+          </p>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          {[
-            { num: 1, title: 'Create Workspace', desc: 'Name your environment' },
-            { num: 2, title: 'Connect Sources', desc: 'Sync knowledge tools' },
-            { num: 3, title: 'Ingestion Scope', desc: 'Define access bounds' },
-            { num: 4, title: 'Ask Brain', desc: 'Your first query' }
-          ].map((s) => (
-            <div key={s.num} style={{ display: 'flex', gap: 'var(--space-3)', opacity: step >= s.num ? 1 : 0.4 }}>
-              <div style={{ 
-                width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                background: step > s.num ? 'var(--primary)' : step === s.num ? 'var(--primary-light)' : 'var(--surface-soft)',
-                color: step > s.num ? 'white' : step === s.num ? 'var(--primary)' : 'var(--text-muted)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600,
-                border: step === s.num ? '1px solid var(--primary)' : 'none'
-              }}>
-                {step > s.num ? <ShieldCheck size={14} /> : s.num}
-              </div>
-              <div>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: step >= s.num ? 'var(--text-primary)' : 'var(--text-muted)' }}>{s.title}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{s.desc}</div>
-              </div>
+        {/* Step 1: Slack App Install */}
+        {step === 1 && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '16px',
+            padding: '28px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '16px',
+              background: 'rgba(74, 21, 75, 0.3)', border: '1px solid rgba(236, 72, 153, 0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
+              fontSize: '2rem'
+            }}>
+              💬
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Card style={{ width: '100%', maxWidth: '600px', padding: 'var(--space-8)', boxShadow: 'var(--shadow-xl)' }}>
-          
-          {step === 1 && (
-            <div className="animate-fade-in">
-              <div style={{ marginBottom: 'var(--space-6)' }}>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 650, color: 'var(--text-primary)' }}>Create your Workspace</h2>
-                <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)' }}>This is the secure container for your team's knowledge graph.</p>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: 'var(--space-2)', color: 'var(--text-primary)' }}>Workspace Name</label>
-                  <Input 
-                    placeholder="e.g. Acme Corp" 
-                    value={workspaceName} 
-                    onChange={e => setWorkspaceName(e.target.value)} 
-                    style={{ width: '100%', fontSize: '1rem' }} 
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: 'var(--space-2)', color: 'var(--text-primary)' }}>Workspace URL</label>
-                  <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-soft)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '0 var(--space-3)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>app.cognitrag.ai/</span>
-                    <input 
-                      type="text" 
-                      value={workspaceName.toLowerCase().replace(/[^a-z0-9]/g, '-')} 
-                      readOnly
-                      style={{ border: 'none', background: 'transparent', padding: 'var(--space-3)', flex: 1, outline: 'none', color: 'var(--text-primary)' }} 
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '8px' }}>Add CognitRAG Bot to Slack</h3>
+            <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '24px', lineHeight: 1.5 }}>
+              Enables <code>/ask</code> slash command and thread summaries in your team channels.
+            </p>
 
-          {step === 2 && (
-            <div className="animate-fade-in">
-              <div style={{ marginBottom: 'var(--space-6)' }}>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 650, color: 'var(--text-primary)' }}>Connect Knowledge Sources</h2>
-                <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)' }}>Connect the tools where your company decisions and context live.</p>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-8)' }}>
-                {[
-                  { id: 'slack', name: 'Slack', icon: MessageSquare, color: 'var(--violet)' },
-                  { id: 'github', name: 'GitHub', icon: GitBranch, color: 'var(--success)' },
-                  { id: 'jira', name: 'Jira', icon: FileText, color: 'var(--info)' },
-                ].map(source => (
-                  <div key={source.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-4)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', background: `${source.color}15`, color: source.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <source.icon size={20} />
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{source.name}</div>
-                        <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{source.name} workspace</div>
-                      </div>
-                    </div>
-                    <Button 
-                      variant={connectedSources.includes(source.id) ? 'ghost' : 'outline'}
-                      onClick={() => setConnectedSources(prev => prev.includes(source.id) ? prev.filter(id => id !== source.id) : [...prev, source.id])}
-                    >
-                      {connectedSources.includes(source.id) ? 'Connected' : 'Connect'}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="animate-fade-in">
-              <div style={{ marginBottom: 'var(--space-6)' }}>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 650, color: 'var(--text-primary)' }}>Ingestion Scope</h2>
-                <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)' }}>CognitRAG is building your semantic graph. Select what to sync.</p>
-              </div>
-
-              <div style={{ padding: 'var(--space-6)', background: 'var(--surface-soft)', borderRadius: 'var(--radius-lg)', marginBottom: 'var(--space-8)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                  <Zap size={24} style={{ color: 'var(--warning)' }} />
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Initial Graph Extraction</div>
-                    <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Parsing 10,000+ chunks into semantic entities...</div>
-                  </div>
-                </div>
-                <div style={{ width: '100%', height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{ width: '65%', height: '100%', background: 'var(--primary)', transition: 'width 1s ease' }}></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="animate-fade-in" style={{ textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--success-light)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-6)' }}>
-                <ShieldCheck size={32} />
-              </div>
-              <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 'var(--space-2)' }}>Your Brain is Ready</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-8)' }}>{workspaceName}'s graph has been successfully initialized. You can now ask complex questions.</p>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
-            <Button variant="ghost" disabled={step === 1} onClick={() => setStep(s => s - 1)}>
-              Back
-            </Button>
-            <Button 
-              onClick={handleNext} 
-              disabled={isProcessing || (step === 1 && !workspaceName.trim())}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            <a
+              href={`${getApiUrl()}/api/v1/slack/install`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setSlackConnected(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '10px',
+                padding: '12px 24px', borderRadius: '10px',
+                background: '#4a154b', color: '#fff', textDecoration: 'none',
+                fontWeight: 600, fontSize: '0.9375rem', border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: '0 4px 14px rgba(74, 21, 75, 0.4)', cursor: 'pointer'
+              }}
             >
-              {isProcessing && <Loader2 size={16} className="animate-spin" />}
-              {step === 4 ? 'Go to Dashboard' : 'Continue'}
-              {!isProcessing && step !== 4 && <ArrowRight size={16} />}
-            </Button>
-          </div>
-        </Card>
-      </div>
+              Add to Slack <ExternalLink size={16} />
+            </a>
 
+            <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <button
+                onClick={() => setStep(2)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '10px 20px', borderRadius: '8px',
+                  background: '#2563eb', color: '#fff', border: 'none',
+                  fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem'
+                }}
+              >
+                Continue <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Connect Data Sources */}
+        {step === 2 && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '16px',
+            padding: '28px'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+              {[
+                { id: 'github', label: 'GitHub Repositories', desc: 'PRs, issues, RFCs', icon: <GitBranch size={20} /> },
+                { id: 'jira', label: 'Jira Software', desc: 'Epics, tickets, sprints', icon: <FileText size={20} /> },
+                { id: 'notion', label: 'Notion Workspace', desc: 'Product specs, handbooks', icon: <Database size={20} /> },
+                { id: 'drive', label: 'Google Drive', desc: 'PDFs, spreadsheets, slide decks', icon: <FileText size={20} /> },
+              ].map(item => (
+                <div
+                  key={item.id}
+                  onClick={() => toggleSource(item.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '14px 18px', borderRadius: '10px',
+                    background: connectedSources[item.id] ? 'rgba(37, 99, 235, 0.12)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${connectedSources[item.id] ? 'rgba(59, 130, 246, 0.4)' : 'rgba(255,255,255,0.06)'}`,
+                    cursor: 'pointer', transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ color: connectedSources[item.id] ? '#60a5fa' : '#94a3b8' }}>
+                      {item.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{item.label}</div>
+                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{item.desc}</div>
+                    </div>
+                  </div>
+                  <button style={{
+                    padding: '6px 14px', borderRadius: '6px', fontSize: '0.8125rem', fontWeight: 600,
+                    background: connectedSources[item.id] ? '#10b981' : 'rgba(255,255,255,0.08)',
+                    color: '#fff', border: 'none', cursor: 'pointer'
+                  }}>
+                    {connectedSources[item.id] ? 'Connected' : 'Connect'}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <button
+                onClick={() => setStep(1)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.875rem' }}
+              >
+                Back
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '10px 20px', borderRadius: '8px',
+                  background: '#2563eb', color: '#fff', border: 'none',
+                  fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem'
+                }}
+              >
+                Continue <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Complete */}
+        {step === 3 && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '16px',
+            padding: '36px 28px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '50%',
+              background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
+              color: '#34d399'
+            }}>
+              <CheckCircle2 size={36} />
+            </div>
+
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '8px' }}>CognitRAG is Ready!</h3>
+            <p style={{ fontSize: '0.9375rem', color: '#94a3b8', marginBottom: '28px', lineHeight: 1.6 }}>
+              Your company brain is live. You can ask questions in English or Hinglish on the web dashboard or directly in Slack.
+            </p>
+
+            <Link
+              href="/home"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '10px',
+                padding: '12px 28px', borderRadius: '10px',
+                background: '#2563eb', color: '#fff', textDecoration: 'none',
+                fontWeight: 600, fontSize: '0.9375rem',
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)'
+              }}
+            >
+              Go to Brain Dashboard <ArrowRight size={16} />
+            </Link>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

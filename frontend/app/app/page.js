@@ -12,7 +12,8 @@ import {
   PricingSection,
   FAQSection,
   Footer,
-  EarlyAccessModal
+  EarlyAccessModal,
+  StartupMarqueeBanner
 } from '@/components/marketing';
 import { useAuth } from '@clerk/nextjs';
 
@@ -48,6 +49,7 @@ export default function LandingPage() {
         <PrivacySection />
         <EarlyResults />
         <PricingSection onOpenEarlyAccess={() => setEarlyAccessOpen(true)} />
+        <StartupMarqueeBanner />
         <FAQSection />
       </main>
       <Footer />

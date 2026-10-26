@@ -97,6 +97,35 @@ export default function Footer() {
               We will publish security certifications and compliance documents only once officially held.
             </p>
           </div>
+
+          {/* Contact & Queries */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span style={{
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: 'var(--ink)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em'
+            }}>
+              Contact &amp; Support
+            </span>
+            <p style={{ fontSize: '0.82rem', color: 'var(--mute)', margin: 0, lineHeight: 1.5 }}>
+              For custom deployments, technical inquiries, or enterprise support:
+            </p>
+            <a 
+              href="mailto:niteshkumarvarma@cognitrag.com" 
+              style={{ 
+                color: 'var(--ind)', 
+                textDecoration: 'none', 
+                fontSize: '0.86rem', 
+                fontWeight: 600,
+                marginTop: '4px',
+                wordBreak: 'break-all'
+              }}
+            >
+              ✉️ niteshkumarvarma@cognitrag.com
+            </a>
+          </div>
         </div>
 
         {/* Bottom bar */}

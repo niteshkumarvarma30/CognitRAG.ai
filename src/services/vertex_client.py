@@ -23,16 +23,20 @@ class VertexAIClient:
         self.model_name = os.environ.get("VERTEX_MODEL", "gemini-2.5-flash")
         self.embedding_model_name = os.environ.get("VERTEX_EMBEDDING_MODEL", "text-embedding-004")
         
-        # Credentials from config
+        # Credentials from config or Cloud Run environment
         cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "config/neon-rampart-475915-m4-7361322a43ed.json")
         if not os.path.isabs(cred_path):
             base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
             cred_path = os.path.join(base_dir, cred_path)
             
-        self.credentials = service_account.Credentials.from_service_account_file(
-            cred_path,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
+        import google.auth
+        if os.path.exists(cred_path):
+            self.credentials = service_account.Credentials.from_service_account_file(
+                cred_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+        else:
+            self.credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         self._token = None
         self._token_expiry = 0
 

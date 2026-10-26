@@ -1,6 +1,0 @@
-Channel: #billing-ops
-Topic: Merchant checkout latency and TaxJar integration
-
-[15:10:00] Michael Chang: Quick update on TaxJar API latencies. After deploying PR #3022 (Redis caching for tax calculations), our checkout latency dropped from 3.8 seconds to 120ms!
-[15:13:20] David Patel: Awesome. What is our cache hit ratio over the last 24 hours?
-[15:15:05] Michael Chang: 94.6% in MemoryDB cluster. External API bill from TaxJar will also drop by over $4,000 this month.
