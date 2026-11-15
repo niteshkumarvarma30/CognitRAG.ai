@@ -1,4 +1,4 @@
-﻿# CognitRAG — The Autonomous Company Brain 🧠
+# CognitRAG — The Autonomous Company Brain 🧠
 
 > **CognitRAG** turns fragmented workplace knowledge across Google Drive, GitHub, Notion, Slack, and Jira into verified, hallucination-free context for teams and AI agents.
 
@@ -18,36 +18,87 @@ Powered by **True Hybrid Search (GraphRAG + Corrective Retrieval)**, **Neo4j 3D 
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ End-to-End Architecture & Workflow
+
+CognitRAG executes an audited **12-Step LangGraph Cognitive Pipeline** (`src/retrieval/graph.py`) engineered for multilingual code-switched enterprise data (English, Romanized Hindi `hi-latn`, and `mixed` Hinglish):
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion["1. Continuous Multi-Source Ingestion"]
-        Silos["Workplace Silos<br/>(GDrive, GitHub, Notion, Slack, Jira, Files, MCP)"]
-        Parser["Parser & Cleaner<br/>(PyMuPDF / Markdown Chunking)"]
-        Silos --> Parser
-        Parser --> Embed["Vector Embeddings<br/>(NVIDIA NIM / Gemini)"]
-        Parser --> Coref["Coreference Resolution & Entity Extractor<br/>(Groq / Llama 3)"]
-        Embed --> VectorDB[("Supabase pgvector<br/>HNSW Chunks Table")]
-        Coref --> GraphDB[("Neo4j Knowledge Graph<br/>Merged Entities & Facts")]
+    subgraph S1_Ingest["1. Ingestion & Dual Storage"]
+        Raw["Enterprise Silos (Slack, GitHub, Jira, Notion)"] --> LID["Language Detector (language_detector.py)"]
+        LID --> Trans["Translation Engine (Sarvam AI mayura:v1)"]
+        Trans --> TextDB[("PostgreSQL: content (Verbatim Hinglish/English)")]
+        Trans --> VecDB[("pgvector: embedding_768 (English Translation Vector)")]
+        Raw --> KG[("Neo4j Knowledge Graph (Entities & Relations)")]
     end
 
-    subgraph Retrieval["2. Hybrid CRAG Retrieval Loop"]
-        Query([User Question / Agent API / MCP])
-        Router{"Intent Classifier & Router"}
-        Query --> Router
-        Router --> Hybrid["Hybrid Search<br/>(pgvector + BM25 + Neo4j Cypher)"]
-        Hybrid --> Grader{"Relevance Grader & Reranker"}
-        Grader -->|Confidence Low| Rewrite["CRAG Query Rewrite Node"]
-        Rewrite --> Hybrid
-        Grader -->|Confidence High| Synthesizer["Multi-Model Synthesizer<br/>(SSE Streaming Generation)"]
+    subgraph S2_Entry["2. Query Entry & Fast Routing"]
+        Q["User Query (en / hi-latn / mixed)"] --> Q_LID["Step 1: Language Detection"]
+        Q_LID --> Q_Embed["Step 2: Ontology Expansion & Vector Embedding"]
+        Q_Embed --> Q_Cache{"Step 3: 2-Tier Cache Check<br/>(LRU RAM + 85% Cosine Vector Cache)"}
+        Q_Cache -->|Cache Hit| FastAns["Instant Verified Answer (0-15ms)"]
+        Q_Cache -->|Cache Miss| Q_Norm["Step 4: Router Gate & Sarvam Normalization<br/>(Normalize hi-latn/mixed -> English)"]
     end
 
-    subgraph OutputLayer["3. Output & Governance"]
-        Synthesizer --> LiveAnswer([Verified Answer with Citations & Confidence Breakdown])
-        LiveAnswer -.-> MemoryHub[("Workspace Memory Hub<br/>User Facts & Episodic Distillation")]
+    subgraph S3_Retrieve["3. Multi-View 4-Arm Retrieval & Graph Rerank"]
+        Q_Norm --> MV_Ret["Step 5: Multi-View Hybrid Retrieval (Parallel ThreadPool)"]
+        MV_Ret --> A1["Arm 1: pgvector (Cosine 768-dim)"]
+        MV_Ret --> A2["Arm 2: BM25 (Postgres GIN Full-Text)"]
+        MV_Ret --> A3["Arm 3: Neo4j (Cypher 1-Hop Graph Traversal)"]
+        MV_Ret --> A4["Arm 4: Exact Identifier Bypass (PR #, Jira IDs, 3.0x Weight)"]
+        A1 & A2 & A3 & A4 --> RRF["Reciprocal Rank Fusion (RRF)"]
+        RRF --> Grade["Step 6: Document Grading & Jina Cross-Encoder Rerank"]
+        Grade -->|Low Relevance| Rewrite["CRAG Query Rewrite Node"]
+        Rewrite --> MV_Ret
+        Grade -->|Relevance Passed| GraphExp["Step 7: Knowledge Graph Multi-Hop Traversal"]
+        GraphExp --> ContextFuse["Step 8: Context Fusion & 2nd Rerank"]
+        ContextFuse --> Glossary["Step 9: Governed Business Ontology Injection"]
+    end
+
+    subgraph S4_Synthesis["4. Generation, Audit & Persistence"]
+        Glossary --> LLM["Step 10: LLM Synthesis (Gemini 2.5 Flash / Llama 3.1 70B)<br/>Formal English Verified Generation"]
+        LLM --> Cites["Step 11: Claim-Level Citation Build (Permanent Deep-Link URLs)"]
+        Cites --> Persist["Step 12: Memory & Audit Persistence (query_logs + answer_citations)"]
     end
 ```
+
+### The 12-Step Pipeline Breakdown
+
+1. **Language Detection (`src/ingestion/language_detector.py`):** Fast lexical rule-based engine classifies queries into `en`, `hi-latn` (Romanized Hindi), or `mixed` (Hinglish) with $K=1$ entity override and homograph disambiguation.
+2. **Semantic Ontology & Vector Embedding (`embed_query`):** Injects tenant-specific aliases and generates 768-dim dense embeddings via Google Vertex AI (`text-embedding-004`).
+3. **2-Tier Semantic Caching (`check_cache`):** In-memory LRU cache ($0\text{ ms}$) followed by Supabase pgvector cosine similarity lookup ($>0.85$ threshold) to bypass LLM inference for recurring queries.
+4. **Router Gate & Normalization (`route_query`):** Normalizes `hi-latn` and `mixed` utterances into clean English using Sarvam AI (`mayura:v1`), passing English into downstream reasoning while retaining original Hinglish terms for exact keyword matching.
+5. **Multi-View 4-Arm Hybrid Retrieval (`retrieve`):** Concurrent search executing:
+   - **Arm 1 (pgvector):** Dense semantic search over translated 768-dim embeddings.
+   - **Arm 2 (BM25):** Full-text lexical search preserving verbatim colloquial words.
+   - **Arm 3 (Neo4j Graph):** Cypher matching on identified entities.
+   - **Arm 4 (Exact Identifier Bypass):** Regex matching for PR numbers and Jira ticket IDs (`BILL-101`, `PR #45`) with a $3.0\times$ RRF weight boost.
+6. **Relevance Grading & Cross-Encoder Rerank (`grade_documents`):** Evaluates retrieved candidates with `jina-reranker-v2-base-multilingual` (threshold $\ge 0.15$). Triggers query rewrite if confidence is insufficient.
+7. **Knowledge Graph Traversal (`graph_expansion`):** Executes 1-hop and multi-hop Cypher entity traversals across cross-tool relationships (`:SlackAlert` $\rightarrow$ `TRIGGERS` $\rightarrow$ `:JiraTicket` $\rightarrow$ `RESOLVED_BY` $\rightarrow$ `:GitHubPR`).
+8. **Context Fusion & Second Rerank (`fuse_and_rerank`):** Blends document chunks with relationship sentences, capped to top 15 evidence blocks.
+9. **Governed Business Ontology (`load_semantic_context`):** Injects formal enterprise definitions and acronym rules into the prompt.
+10. **LLM Answer Synthesis (`generate`):** Enterprise persona generates factually grounded answers in **formal English** (zero hallucination).
+11. **Claim-Level Citation Auditor (`src/retrieval/citations.py`):** Attaches permanent, clickable URLs and exact verbatim evidence quotes with confidence ratings (`high`, `medium`, `review`).
+12. **Audit & Memory Persistence (`save_memory`):** Writes query logs, token usage, and citation receipts to PostgreSQL (`query_logs`, `answer_citations`) and updates Neo4j user memory edges.
+
+---
+
+### End-to-End Query Lifecycle Matrix
+
+| Pipeline Stage | English Query (`en`) | Romanized Hindi (`hi-latn`) | Code-Switched Hinglish (`mixed`) |
+| :--- | :--- | :--- | :--- |
+| **Raw User Query** | `"PR #45 fixed the Stripe API keys"` | `"Yaar, kaam khatam nahi hua kya?"` | `"Bhai, Kafka lag kyun badha tha?"` |
+| **Language Tag** | `en` | `hi-latn` | `mixed` |
+| **Router Normalization** | Skipped (already English) | Sarvam translates $\rightarrow$ English | Sarvam translates $\rightarrow$ English |
+| **Multi-View Expansion** | Single View (English) | 2 Views (Surface + Pivot) | 2 Views (Surface + Pivot) |
+| **Vector Search Arm** | Cosine match on English vector | Cosine match on English vector | Cosine match on English vector |
+| **BM25 Search Arm** | Matches `"PR"`, `"Stripe"`, `"keys"` | Matches `"kaam"`, `"khatam"` | Matches `"Kafka"`, `"lag"`, `"badha"` |
+| **Exact Bypass Arm** | Triggers regex on `PR #45` ($3\times$ boost) | Bypassed (no ticket token) | Bypassed (no ticket token) |
+| **Context Chunk Text** | Original English text | Original Hinglish text | Original mixed text |
+| **LLM Generation Language** | **Formal English** | **Formal English** | **Formal English** |
+| **Citation Proof URL** | GitHub PR URL | Slack message deep link | Slack channel deep link |
+
+> 📖 **Deep Dive Documentation:** For complete mathematical formulas, database schemas, and step-by-step code traces, inspect [`workflow_detailing.md`](file:///c:/AI/Projects/RAG%20SaaS/workflow_detailing.md) and [`baseline.md`](file:///c:/AI/Projects/RAG%20SaaS/baseline.md).
 
 ---
 
